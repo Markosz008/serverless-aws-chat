@@ -2,7 +2,7 @@
 resource "aws_apigatewayv2_api" "websocket_api" {
   name                       = "serverless-chat-api"
   protocol_type              = "WEBSOCKET"
-  # JSON-ben az 'action' mező fogja eldönteni a route-ot (pl. {"action": "sendMessage", "message": "Szia"})
+  # JSON-ben az 'action' mező fogja eldönteni a route-ot
   route_selection_expression = "$request.body.action" 
 }
 
@@ -14,25 +14,50 @@ resource "aws_apigatewayv2_integration" "lambda_integration" {
 }
 
 # 3. Route-ok (Útvonalak)
+
+# Kapcsolódás
 resource "aws_apigatewayv2_route" "connect" {
   api_id    = aws_apigatewayv2_api.websocket_api.id
   route_key = "$connect"
   target    = "integrations/${aws_apigatewayv2_integration.lambda_integration.id}"
 }
 
+# Szétkapcsolás
 resource "aws_apigatewayv2_route" "disconnect" {
   api_id    = aws_apigatewayv2_api.websocket_api.id
   route_key = "$disconnect"
   target    = "integrations/${aws_apigatewayv2_integration.lambda_integration.id}"
 }
 
+# Üzenetküldés
 resource "aws_apigatewayv2_route" "send_message" {
   api_id    = aws_apigatewayv2_api.websocket_api.id
   route_key = "sendMessage"
   target    = "integrations/${aws_apigatewayv2_integration.lambda_integration.id}"
 }
 
-# 4. Deployment és Stage (Hogy kapjunk egy élő linket)
+# Név megadása / Belépés
+resource "aws_apigatewayv2_route" "join" {
+  api_id    = aws_apigatewayv2_api.websocket_api.id
+  route_key = "join"
+  target    = "integrations/${aws_apigatewayv2_integration.lambda_integration.id}"
+}
+
+# JAVÍTÁS: ÚJ ROUTE a képfeltöltési link igényléséhez
+resource "aws_apigatewayv2_route" "get_upload_url" {
+  api_id    = aws_apigatewayv2_api.websocket_api.id
+  route_key = "getUploadUrl"
+  target    = "integrations/${aws_apigatewayv2_integration.lambda_integration.id}"
+}
+
+# JAVÍTÁS: BIZTONSÁGI ROUTE minden egyéb üzenethez
+resource "aws_apigatewayv2_route" "default" {
+  api_id    = aws_apigatewayv2_api.websocket_api.id
+  route_key = "$default"
+  target    = "integrations/${aws_apigatewayv2_integration.lambda_integration.id}"
+}
+
+# 4. Stage (Auto-deploy bekapcsolva)
 resource "aws_apigatewayv2_stage" "prod" {
   api_id      = aws_apigatewayv2_api.websocket_api.id
   name        = "production"
@@ -48,8 +73,8 @@ resource "aws_lambda_permission" "apigw_invoke" {
   source_arn    = "${aws_apigatewayv2_api.websocket_api.execution_arn}/*/*"
 }
 
-# 6. OUTPUT: Ezt a WSS linket fogjuk használni a teszteléshez!
+# 6. OUTPUT: A WSS link
 output "websocket_url" {
   value       = "${aws_apigatewayv2_api.websocket_api.api_endpoint}/${aws_apigatewayv2_stage.prod.name}"
-  description = "Ezt a linket használd a csatlakozáshoz (pl. wscat -c WSS_LINK)"
+  description = "WebSocket API URL"
 }
