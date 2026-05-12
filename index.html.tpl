@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-content">
-<title>Serverless AWS Chat</title>
+<title>AWS Chat</title>
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#232f3e">
 <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/134/134808.png">
@@ -74,6 +74,17 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; height: var(--app
 .reaction-menu span { font-size: 26px; cursor: pointer; transition: transform 0.1s; display: inline-block; }
 .reaction-menu span:hover { transform: scale(1.3); }
 
+/* Játék Menü */
+#game-menu { display: none; position: absolute; background: var(--container-bg); border: 1px solid var(--border-color); border-radius: 15px; padding: 5px 0; box-shadow: 0 -4px 15px rgba(0,0,0,0.2); z-index: 9000; flex-direction: column; bottom: 65px; right: 10px; }
+#game-menu div { padding: 12px 20px; cursor: pointer; font-weight: bold; color: var(--text-color); border-bottom: 1px solid var(--border-color); }
+#game-menu div:last-child { border-bottom: none; }
+#game-menu div:hover { background: rgba(255,153,0,0.1); color: #ff9900; }
+
+/* Rajztábla UI */
+#whiteboard-container { display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: var(--bg-color); z-index: 8500; flex-direction: column; align-items: center; justify-content: flex-start; }
+#whiteboard-header { padding: 10px 15px; background: var(--header-bg); color: white; display: flex; justify-content: space-between; align-items: center; font-weight: bold; width: 100%; box-sizing: border-box; }
+#drawing-board { cursor: crosshair; background: white; border-radius: 10px; box-shadow: 0 0 20px rgba(0,0,0,0.3); margin-top: 10px; touch-action: none; }
+
 .desktop-react-btn, .desktop-reply-btn { position: absolute; top: 50%; transform: translateY(-50%); background: var(--container-bg); border: 1px solid var(--border-color); border-radius: 50%; width: 32px; height: 32px; display: none; align-items: center; justify-content: center; cursor: pointer; box-shadow: 0 2px 5px rgba(0,0,0,0.1); z-index: 10; font-size: 16px; }
 .message-wrapper:hover .desktop-react-btn, .message-wrapper:hover .desktop-reply-btn { display: flex; }
 .mine .desktop-react-btn { left: -40px; }
@@ -119,6 +130,7 @@ audio { max-width: 220px; height: 40px; margin-top: 5px; outline: none; }
 .video-btn { border: none; padding: 12px 20px; border-radius: 30px; font-weight: bold; font-size: 14px; cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: center; color: white; transition: 0.2s; }
 .video-btn:active { transform: scale(0.95); }
 
+/* --- JAVÍTOTT MOBIL NÉZET: ELFÉR MINDEN GOMB! --- */
 @media (max-width: 650px) {
 #app-container { flex-direction: column; }
 #sidebar { width: 100%; height: auto; max-height: 120px; border-right: none; border-bottom: 1px solid var(--border-color); display: flex; flex-direction: column;}
@@ -130,7 +142,12 @@ audio { max-width: 220px; height: 40px; margin-top: 5px; outline: none; }
 #user-list li span.user-name::before { display: none; } 
 .call-user-btn { margin-left: 5px; width: 22px; height: 22px; font-size: 10px; border: none; background: #ff9900; color: white; padding: 0; }
 .desktop-react-btn, .desktop-reply-btn { display: none !important; }
-#input-area { padding-bottom: 45px !important; }
+
+/* Kisebb ikonok és gombok a mobil beviteli sávban */
+#input-area { padding: 8px 5px !important; padding-bottom: calc(8px + env(safe-area-inset-bottom, 0px)) !important; }
+.icon-btn { font-size: 19px; padding: 3px; margin: 0 1px; }
+#message-input { padding: 8px 10px; font-size: 15px; border-radius: 18px; }
+#send-btn { padding: 8px 12px; font-size: 14px; margin-left: 5px; border-radius: 18px; }
 }
 
 .header-btn { font-size: 12px; padding: 5px 10px; border-radius: 15px; border: 1px solid #ff9900; background: transparent; color: #ff9900; cursor: pointer; margin-left: 5px; }
@@ -155,6 +172,19 @@ audio { max-width: 220px; height: 40px; margin-top: 5px; outline: none; }
 <span onclick="sendEmojiReact('🔥')">🔥</span>
 <div style="width: 1px; background: var(--border-color); height: 30px; margin: 0 5px;"></div>
 <span onclick="initiateReplyFromMenu()">↩️</span>
+</div>
+
+<div id="whiteboard-container">
+    <div id="whiteboard-header">
+        <span>🎨 Rajztábla</span>
+        <div>
+            <input type="color" id="draw-color" value="#ff9900" style="margin-right:10px; cursor:pointer;">
+            <button class="header-btn" onclick="clearBoard()">🗑️</button>
+            <button class="header-btn" style="border-color:#4CAF50; color:#4CAF50; font-weight:bold;" onclick="sendDrawingAsImage()">Küldés 🚀</button>
+            <button class="header-btn" style="border-color:#ff3b30; color:#ff3b30;" onclick="closeWhiteboard()">X</button>
+        </div>
+    </div>
+    <canvas id="drawing-board"></canvas>
 </div>
 
 <div id="video-container">
@@ -188,7 +218,7 @@ audio { max-width: 220px; height: 40px; margin-top: 5px; outline: none; }
     </div>
 <div style="display: flex; gap: 5px;">
     <button id="avatar-btn" class="header-btn" style="border-color: #9c27b0; color: #9c27b0;">🎲 Avatar</button>
-    <button id="room-btn" class="header-btn" style="border-color: #4CAF50; color: #4CAF50;">+ Szoba</button>
+    <button id="room-btn" class="header-btn" style="border-color: #4CAF50; color: #4CAF50;">+ Szobaváltás</button>
     <button id="change-name-btn" class="header-btn" style="border-color: var(--header-text); color: var(--header-text);">Névváltás</button>
     <button id="theme-toggle" class="header-btn">Sötét mód</button>
 </div>
@@ -209,6 +239,13 @@ audio { max-width: 220px; height: 40px; margin-top: 5px; outline: none; }
 <button class="icon-btn" id="mic-btn" disabled>🎤</button>
 <button class="icon-btn" id="camera-btn" disabled>📸</button>
 <button class="icon-btn" id="upload-btn" disabled>📎</button>
+<button class="icon-btn" id="game-btn" disabled>🎮</button>
+
+<div id="game-menu">
+    <div onclick="openWhiteboard()">🎨 Rajztábla (Küldés)</div>
+    <div onclick="startKaland()">🧙‍♂️ AI Kalandmester</div>
+</div>
+
 <input type="file" id="file-input" multiple style="display:none">
 <input type="text" id="message-input" placeholder="Üzenet..." disabled>
 <button id="send-btn" disabled>Küldés</button>
@@ -287,7 +324,6 @@ if (!myDeviceId) { myDeviceId = 'device-' + Math.random().toString(36).substr(2,
 const loginScreen = document.getElementById('login-screen'); const usernameInput = document.getElementById('username-input'); const joinBtn = document.getElementById('join-btn'); const messagesDiv = document.getElementById('messages'); const messageInput = document.getElementById('message-input'); const sendBtn = document.getElementById('send-btn'); const userListUl = document.getElementById('user-list'); const themeToggle = document.getElementById('theme-toggle'); const cameraBtn = document.getElementById('camera-btn'); const uploadBtn = document.getElementById('upload-btn'); const fileInput = document.getElementById('file-input'); const reactionMenu = document.getElementById('reaction-menu'); const menuOverlay = document.getElementById('menu-overlay'); const changeNameBtn = document.getElementById('change-name-btn'); const roomBtn = document.getElementById('room-btn'); const micBtn = document.getElementById('mic-btn');
 const typingDiv = document.getElementById('typing-indicator');
 
-// --- ÚJ: Biztonságos Login / Névbetöltés az Avatar Generátorhoz ---
 const savedName = localStorage.getItem('chatNickname');
 if (savedName) { 
     myUsername = savedName; 
@@ -331,7 +367,6 @@ changeNameBtn.addEventListener('click', () => {
     }
 });
 
-// --- ÚJ: 🎲 Avatar Pörgető Gomb ---
 document.getElementById('avatar-btn').addEventListener('click', () => {
     const dispName = myUsername.split('|')[0];
     const newSeed = Math.floor(Math.random() * 1000000);
@@ -340,9 +375,8 @@ document.getElementById('avatar-btn').addEventListener('click', () => {
     if (socket && socket.readyState === WebSocket.OPEN) { 
         socket.send(JSON.stringify({ action: 'join', username: myUsername, room: currentRoom, password: currentRoomPassword })); 
     }
-    // Azonnali frissítés a már képernyőn lévő üzeneteken
     document.querySelectorAll('.avatar-img').forEach(img => {
-        if (img.dataset.user === dispName) img.src = 'https://api.dicebear.com/7.x/avataaars/svg?seed=' + newSeed;
+        if (img.dataset.user === dispName) img.src = 'https://api.dicebear.com/7.x/adventurer/svg?seed=' + newSeed;
     });
 });
 
@@ -370,8 +404,7 @@ joinBtn.addEventListener('click', () => {
     let rawName = usernameInput.value.trim() || "Anonim_" + Math.floor(Math.random() * 1000);
     myUsername = rawName + '|' + Math.floor(Math.random() * 1000000); 
     localStorage.setItem('chatNickname', myUsername); 
-    loginScreen.style.display = 'none'; 
-    connectToChat();
+    loginScreen.style.display = 'none'; connectToChat();
 });
 
 function checkIfMine(msgSender, msgDeviceId) { if (msgDeviceId && msgDeviceId !== 'unknown') return msgDeviceId === myDeviceId; return msgSender === myUsername; }
@@ -380,7 +413,7 @@ function connectToChat() {
     clearTimeout(reconnectTimer); socket = new WebSocket(WSS_URL);
     socket.onopen = () => {
         socket.send(JSON.stringify({ action: 'join', username: myUsername, room: currentRoom, password: currentRoomPassword }));
-        [messageInput, sendBtn, cameraBtn, uploadBtn, micBtn].forEach(el => el.disabled = false); sendBtn.innerText = "Küldés"; messageInput.placeholder = "Üzenet...";
+        [messageInput, sendBtn, cameraBtn, uploadBtn, micBtn, document.getElementById('game-btn')].forEach(el => el.disabled = false); sendBtn.innerText = "Küldés"; messageInput.placeholder = "Üzenet...";
         renderSavedRooms();
         
         if (document.visibilityState === 'visible' && unreadMsgQueue.length > 0) {
@@ -389,7 +422,7 @@ function connectToChat() {
         }
     };
     socket.onclose = () => {
-        [messageInput, sendBtn, cameraBtn, uploadBtn, micBtn].forEach(el => el.disabled = true); sendBtn.innerText = "Csatlakozás..."; messageInput.placeholder = "Kapcsolat megszakadt...";
+        [messageInput, sendBtn, cameraBtn, uploadBtn, micBtn, document.getElementById('game-btn')].forEach(el => el.disabled = true); sendBtn.innerText = "Csatlakozás..."; messageInput.placeholder = "Kapcsolat megszakadt...";
         reconnectTimer = setTimeout(connectToChat, 2000);
     };
     socket.onerror = (error) => { socket.close(); };
@@ -539,27 +572,21 @@ function updateUserList(users) {
         const seed = user.split('|')[1] || user;
 
         const li = document.createElement('li'); 
-        
         const leftGroup = document.createElement('div');
-        leftGroup.style.display = 'flex';
-        leftGroup.style.alignItems = 'center';
+        leftGroup.style.display = 'flex'; leftGroup.style.alignItems = 'center';
 
         const avatar = document.createElement('img');
-        avatar.src = 'https://api.dicebear.com/7.x/avataaars/svg?seed=' + encodeURIComponent(seed);
+        avatar.src = 'https://api.dicebear.com/7.x/adventurer/svg?seed=' + encodeURIComponent(seed);
         avatar.style.width = '24px'; avatar.style.height = '24px'; avatar.style.borderRadius = '50%'; avatar.style.marginRight = '8px'; avatar.style.background = '#e0e0e0';
 
-        const textSpan = document.createElement('span');
-        textSpan.className = 'user-name';
+        const textSpan = document.createElement('span'); textSpan.className = 'user-name';
         textSpan.innerText = dispName + (user === myUsername ? " (Te)" : "");
         
-        leftGroup.appendChild(avatar);
-        leftGroup.appendChild(textSpan);
-        li.appendChild(leftGroup);
+        leftGroup.appendChild(avatar); leftGroup.appendChild(textSpan); li.appendChild(leftGroup);
         
         if (user !== myUsername) {
             const callBtn = document.createElement('button');
-            callBtn.className = 'call-user-btn';
-            callBtn.innerText = '📞';
+            callBtn.className = 'call-user-btn'; callBtn.innerText = '📞';
             callBtn.onclick = () => startCall(user);
             li.appendChild(callBtn);
         }
@@ -583,9 +610,8 @@ function addMessage(text, isSystem = false, sender = '', isMine = false, msgId =
 
     if (!isSystem) {
         const avatar = document.createElement('img');
-        avatar.className = 'avatar-img';
-        avatar.dataset.user = dispName; 
-        avatar.src = 'https://api.dicebear.com/7.x/avataaars/svg?seed=' + encodeURIComponent(seed);
+        avatar.className = 'avatar-img'; avatar.dataset.user = dispName; 
+        avatar.src = 'https://api.dicebear.com/7.x/adventurer/svg?seed=' + encodeURIComponent(seed);
         if (isMine) avatar.style.display = 'none'; 
         row.appendChild(avatar);
     }
@@ -599,8 +625,7 @@ function addMessage(text, isSystem = false, sender = '', isMine = false, msgId =
     if (replyTo) { const previewText = replyTo.message.includes('.amazonaws.com/') ? "📸 [Fájl/Hang]" : replyTo.message; contentHTML += '<div class="quoted-msg"><strong>' + replyTo.sender.split('|')[0] + '</strong><br><span>' + previewText + '</span></div>'; }
     if (text.includes('.amazonaws.com/')) {
         const urlParts = text.split('/'); const fullFileName = urlParts[urlParts.length - 1]; const originalName = fullFileName.split('_').slice(1).join('_') || "Fájl"; const ext = originalName.split('.').pop().toLowerCase(); 
-        const imgExts = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'heic'];
-        const audioExts = ['mp3', 'wav', 'ogg', 'webm', 'm4a', 'aac', 'mp4'];
+        const imgExts = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'heic']; const audioExts = ['mp3', 'wav', 'ogg', 'webm', 'm4a', 'aac', 'mp4'];
         if (imgExts.includes(ext)) { const img = document.createElement('img'); img.src = text; img.onclick = (e) => { if (isLongPress) { isLongPress = false; e.preventDefault(); return; } openLightbox(text); }; img.onload = scrollToBottom; msgDiv.innerHTML = contentHTML; msgDiv.appendChild(img); } 
         else if (audioExts.includes(ext)) { msgDiv.innerHTML = contentHTML + '<audio controls src="' + text + '"></audio>'; }
         else { msgDiv.innerHTML = contentHTML + '<a href="' + text + '" target="_blank" class="file-link">📄 ' + originalName + '</a>'; }
@@ -616,10 +641,7 @@ function addMessage(text, isSystem = false, sender = '', isMine = false, msgId =
 
     if (isMine && !isSystem) {
         let sIcon = '✓'; let sColor = 'var(--mine-text)';
-        if (status === 'pending') { sIcon = '🕒'; }
-        else if (status === 'failed') { sIcon = '❌'; sColor = '#ff3b30'; }
-        else if (status === 'read') { sIcon = '✓✓'; sColor = '#4facfe'; }
-        
+        if (status === 'pending') { sIcon = '🕒'; } else if (status === 'failed') { sIcon = '❌'; sColor = '#ff3b30'; } else if (status === 'read') { sIcon = '✓✓'; sColor = '#4facfe'; }
         msgDiv.innerHTML += '<div style="text-align:right; margin-top:2px; font-size:12px; font-weight:bold;"><span id="status-' + msgId + '" style="color:' + sColor + '; margin-left: 5px; text-shadow: 0px 0px 2px rgba(0,0,0,0.3);">' + sIcon + '</span></div>';
     }
 
@@ -632,10 +654,7 @@ function addMessage(text, isSystem = false, sender = '', isMine = false, msgId =
     
     wrapper.appendChild(msgDiv);
     if (!isSystem && msgId && status !== 'pending') { const rCont = document.createElement('div'); rCont.className = 'reaction-container'; rCont.id = 'reacts-' + msgId; wrapper.appendChild(rCont); }
-    
-    row.appendChild(wrapper);
-    messagesDiv.appendChild(row); 
-    scrollToBottom();
+    row.appendChild(wrapper); messagesDiv.appendChild(row); scrollToBottom();
 }
 
 function sendMessage() {
@@ -643,26 +662,13 @@ function sendMessage() {
     if (text) {
         const tempId = 'temp-' + Date.now();
         addMessage(text, false, myUsername, true, tempId, replyingTo, null, 'pending');
-        
         if (socket.readyState === WebSocket.OPEN) {
             const payload = { action: 'sendMessage', message: text, username: myUsername, deviceId: myDeviceId, room: currentRoom, tempId: tempId };
             if (replyingTo) { payload.replyTo = { sender: replyingTo.sender, message: replyingTo.text }; }
             socket.send(JSON.stringify(payload)); 
-            
-            setTimeout(() => {
-                const statEl = document.getElementById('status-' + tempId);
-                if (statEl && statEl.innerText === '🕒') { statEl.innerText = '❌'; statEl.style.color = '#ff3b30'; }
-            }, 8000);
-            
-        } else {
-            setTimeout(() => {
-                const statEl = document.getElementById('status-' + tempId);
-                if (statEl) { statEl.innerText = '❌'; statEl.style.color = '#ff3b30'; }
-            }, 100);
-        }
-        
-        messageInput.value = ''; cancelReply(); 
-        isTyping = false;
+            setTimeout(() => { const statEl = document.getElementById('status-' + tempId); if (statEl && statEl.innerText === '🕒') { statEl.innerText = '❌'; statEl.style.color = '#ff3b30'; } }, 8000);
+        } else { setTimeout(() => { const statEl = document.getElementById('status-' + tempId); if (statEl) { statEl.innerText = '❌'; statEl.style.color = '#ff3b30'; } }, 100); }
+        messageInput.value = ''; cancelReply(); isTyping = false;
         if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ action: 'typing', username: myUsername, room: currentRoom, typing: false }));
     }
 }
@@ -670,32 +676,13 @@ sendBtn.addEventListener('click', sendMessage); messageInput.addEventListener('k
 if ('serviceWorker' in navigator) { window.addEventListener('load', () => { navigator.serviceWorker.register('/sw.js').then(reg => console.log('App mód (PWA) aktív!', reg.scope)).catch(err => console.error('PWA hiba:', err)); }); }
 
 async function startCall(targetUser) {
-    currentCallTarget = targetUser;
-    document.getElementById('video-container').style.display = 'flex';
-    isVideoEnabled = true;
-    candidateQueue = [];
-    
+    currentCallTarget = targetUser; document.getElementById('video-container').style.display = 'flex'; isVideoEnabled = true; candidateQueue = [];
     try {
-        localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-        document.getElementById('local-video').srcObject = localStream;
-        peerConnection = new RTCPeerConnection(rtcConfig);
-        localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
-        
-        peerConnection.ontrack = event => { 
-            const remoteVideo = document.getElementById('remote-video');
-            if (remoteVideo.srcObject !== event.streams[0]) {
-                remoteVideo.srcObject = event.streams[0]; 
-            }
-        };
-        
-        peerConnection.onicecandidate = event => {
-            if (event.candidate) {
-                socket.send(JSON.stringify({ action: 'webrtcSignal', room: currentRoom, username: myUsername, targetUser: currentCallTarget, deviceId: myDeviceId, signal: { type: 'candidate', candidate: event.candidate } }));
-            }
-        };
-        
-        const offer = await peerConnection.createOffer();
-        await peerConnection.setLocalDescription(offer);
+        localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true }); document.getElementById('local-video').srcObject = localStream;
+        peerConnection = new RTCPeerConnection(rtcConfig); localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
+        peerConnection.ontrack = event => { const remoteVideo = document.getElementById('remote-video'); if (remoteVideo.srcObject !== event.streams[0]) { remoteVideo.srcObject = event.streams[0]; } };
+        peerConnection.onicecandidate = event => { if (event.candidate) { socket.send(JSON.stringify({ action: 'webrtcSignal', room: currentRoom, username: myUsername, targetUser: currentCallTarget, deviceId: myDeviceId, signal: { type: 'candidate', candidate: event.candidate } })); } };
+        const offer = await peerConnection.createOffer(); await peerConnection.setLocalDescription(offer);
         socket.send(JSON.stringify({ action: 'webrtcSignal', room: currentRoom, username: myUsername, targetUser: currentCallTarget, deviceId: myDeviceId, signal: { type: 'offer', offer: offer } }));
     } catch (err) { alert("Kamera hiba: " + err.message); endCallLocal(); }
 }
@@ -703,56 +690,20 @@ async function startCall(targetUser) {
 async function handleWebRTCSignal(signal, sender) {
     if (signal.type === 'offer') {
         const dispName = sender.split('|')[0];
-        if (!confirm(dispName + " hívást indított! Felveszed? 📞")) {
-            socket.send(JSON.stringify({ action: 'webrtcSignal', room: currentRoom, username: myUsername, targetUser: sender, deviceId: myDeviceId, signal: { type: 'end' } }));
-            return;
-        }
-        currentCallTarget = sender;
-        document.getElementById('video-container').style.display = 'flex';
-        isVideoEnabled = true;
-        candidateQueue = []; 
-        
+        if (!confirm(dispName + " hívást indított! Felveszed? 📞")) { socket.send(JSON.stringify({ action: 'webrtcSignal', room: currentRoom, username: myUsername, targetUser: sender, deviceId: myDeviceId, signal: { type: 'end' } })); return; }
+        currentCallTarget = sender; document.getElementById('video-container').style.display = 'flex'; isVideoEnabled = true; candidateQueue = []; 
         try {
-            localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-            document.getElementById('local-video').srcObject = localStream;
-            peerConnection = new RTCPeerConnection(rtcConfig);
-            localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
-            
-            peerConnection.ontrack = event => { 
-                const remoteVideo = document.getElementById('remote-video');
-                if (remoteVideo.srcObject !== event.streams[0]) {
-                    remoteVideo.srcObject = event.streams[0]; 
-                }
-            };
-            
-            peerConnection.onicecandidate = event => {
-                if (event.candidate) {
-                    socket.send(JSON.stringify({ action: 'webrtcSignal', room: currentRoom, username: myUsername, targetUser: currentCallTarget, deviceId: myDeviceId, signal: { type: 'candidate', candidate: event.candidate } }));
-                }
-            };
-            
-            await peerConnection.setRemoteDescription(new RTCSessionDescription(signal.offer));
-            const answer = await peerConnection.createAnswer();
-            await peerConnection.setLocalDescription(answer);
+            localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true }); document.getElementById('local-video').srcObject = localStream;
+            peerConnection = new RTCPeerConnection(rtcConfig); localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
+            peerConnection.ontrack = event => { const remoteVideo = document.getElementById('remote-video'); if (remoteVideo.srcObject !== event.streams[0]) { remoteVideo.srcObject = event.streams[0]; } };
+            peerConnection.onicecandidate = event => { if (event.candidate) { socket.send(JSON.stringify({ action: 'webrtcSignal', room: currentRoom, username: myUsername, targetUser: currentCallTarget, deviceId: myDeviceId, signal: { type: 'candidate', candidate: event.candidate } })); } };
+            await peerConnection.setRemoteDescription(new RTCSessionDescription(signal.offer)); const answer = await peerConnection.createAnswer(); await peerConnection.setLocalDescription(answer);
             socket.send(JSON.stringify({ action: 'webrtcSignal', room: currentRoom, username: myUsername, targetUser: currentCallTarget, deviceId: myDeviceId, signal: { type: 'answer', answer: answer } }));
-            
-            candidateQueue.forEach(c => peerConnection.addIceCandidate(new RTCIceCandidate(c)).catch(e => console.log(e)));
-            candidateQueue = [];
-            
+            candidateQueue.forEach(c => peerConnection.addIceCandidate(new RTCIceCandidate(c)).catch(e => console.log(e))); candidateQueue = [];
         } catch (err) { alert("Kamera hiba: " + err.message); endCallLocal(); }
     } 
-    else if (signal.type === 'answer') { 
-        await peerConnection.setRemoteDescription(new RTCSessionDescription(signal.answer)); 
-        candidateQueue.forEach(c => peerConnection.addIceCandidate(new RTCIceCandidate(c)).catch(e => console.log(e)));
-        candidateQueue = [];
-    } 
-    else if (signal.type === 'candidate') { 
-        if (peerConnection && peerConnection.remoteDescription && peerConnection.remoteDescription.type) { 
-            peerConnection.addIceCandidate(new RTCIceCandidate(signal.candidate)).catch(e => console.log(e)); 
-        } else {
-            candidateQueue.push(signal.candidate);
-        }
-    } 
+    else if (signal.type === 'answer') { await peerConnection.setRemoteDescription(new RTCSessionDescription(signal.answer)); candidateQueue.forEach(c => peerConnection.addIceCandidate(new RTCIceCandidate(c)).catch(e => console.log(e))); candidateQueue = []; } 
+    else if (signal.type === 'candidate') { if (peerConnection && peerConnection.remoteDescription && peerConnection.remoteDescription.type) { peerConnection.addIceCandidate(new RTCIceCandidate(signal.candidate)).catch(e => console.log(e)); } else { candidateQueue.push(signal.candidate); } } 
     else if (signal.type === 'end') { endCallLocal(); }
 }
 
@@ -760,40 +711,127 @@ function toggleVideo() {
     if (localStream) {
         const videoTrack = localStream.getVideoTracks()[0];
         if (videoTrack) {
-            isVideoEnabled = !isVideoEnabled;
-            videoTrack.enabled = isVideoEnabled;
-            const btn = document.getElementById('toggle-video-btn');
-            const localVid = document.getElementById('local-video');
-            if (isVideoEnabled) {
-                btn.innerText = '📹 Kamera Ki';
-                btn.style.background = '#4CAF50';
-                localVid.style.opacity = '1';
-            } else {
-                btn.innerText = '🚫 Kamera Be';
-                btn.style.background = '#888';
-                localVid.style.opacity = '0.3'; 
-            }
+            isVideoEnabled = !isVideoEnabled; videoTrack.enabled = isVideoEnabled;
+            const btn = document.getElementById('toggle-video-btn'); const localVid = document.getElementById('local-video');
+            if (isVideoEnabled) { btn.innerText = '📹 Kamera Ki'; btn.style.background = '#4CAF50'; localVid.style.opacity = '1'; } 
+            else { btn.innerText = '🚫 Kamera Be'; btn.style.background = '#888'; localVid.style.opacity = '0.3'; }
         }
     }
 }
-
-function endCall() {
-    if (currentCallTarget) socket.send(JSON.stringify({ action: 'webrtcSignal', room: currentRoom, username: myUsername, targetUser: currentCallTarget, deviceId: myDeviceId, signal: { type: 'end' } }));
-    endCallLocal();
-}
-
+function endCall() { if (currentCallTarget) socket.send(JSON.stringify({ action: 'webrtcSignal', room: currentRoom, username: myUsername, targetUser: currentCallTarget, deviceId: myDeviceId, signal: { type: 'end' } })); endCallLocal(); }
 function endCallLocal() {
     if (peerConnection) { peerConnection.close(); peerConnection = null; }
     if (localStream) { localStream.getTracks().forEach(t => t.stop()); localStream = null; }
-    document.getElementById('video-container').style.display = 'none';
-    currentCallTarget = null;
-    candidateQueue = [];
-    
-    const btn = document.getElementById('toggle-video-btn');
-    if(btn) { btn.innerText = '📹 Kamera Ki'; btn.style.background = '#4CAF50'; }
-    const localVid = document.getElementById('local-video');
-    if(localVid) { localVid.style.opacity = '1'; }
+    document.getElementById('video-container').style.display = 'none'; currentCallTarget = null; candidateQueue = [];
+    const btn = document.getElementById('toggle-video-btn'); if(btn) { btn.innerText = '📹 Kamera Ki'; btn.style.background = '#4CAF50'; }
+    const localVid = document.getElementById('local-video'); if(localVid) { localVid.style.opacity = '1'; }
 }
+
+// ==========================================
+// 🚀 ZSENIÁLIS "RAJZ ÉS KÜLDÉS KÉPKÉNT" LOGIKA 🚀
+// ==========================================
+
+const canvas = document.getElementById('drawing-board');
+const ctx = canvas.getContext('2d');
+let isDrawing = false;
+
+function resizeCanvas() { 
+    const container = document.getElementById('whiteboard-container');
+    if (!container || container.style.display === 'none') return;
+    const headerHeight = document.getElementById('whiteboard-header').offsetHeight || 50;
+    
+    // Vászon méretezése
+    canvas.width = window.innerWidth; 
+    canvas.height = window.innerHeight - headerHeight; 
+    
+    // Fehér háttér, hogy a kép ne legyen átlátszó (Sötét módban is látszódjon a cseten!)
+    ctx.fillStyle = "white";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+}
+window.addEventListener('resize', resizeCanvas); 
+
+function openWhiteboard() { 
+    document.getElementById('whiteboard-container').style.display = 'flex'; 
+    document.getElementById('game-menu').style.display = 'none'; 
+    setTimeout(resizeCanvas, 50); 
+}
+function closeWhiteboard() { document.getElementById('whiteboard-container').style.display = 'none'; }
+function clearBoard() { 
+    ctx.fillStyle = "white";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+}
+
+// --- ÚJ FUNKCIÓ: Rajz elküldése képként az Amazon S3-ba ---
+function sendDrawingAsImage() {
+    // 1. Kiszedjük a rajzot kép (PNG) formátumban
+    const dataUrl = canvas.toDataURL('image/png');
+    
+    // 2. Szép animáció gombnyomásra
+    closeWhiteboard();
+    
+    // 3. Kép Blob konvertálása és bedobása a feltöltési sorba (S3)
+    fetch(dataUrl)
+        .then(res => res.blob())
+        .then(blob => {
+            const file = new File([blob], "Rajz_" + Math.floor(Date.now()/1000) + ".png", { type: 'image/png' });
+            uploadQueue.push({ file: file, replyTo: null });
+            if (!isUploading) processNextFile();
+        });
+}
+
+function drawLocal(x, y, type) {
+    const color = document.getElementById('draw-color').value;
+    ctx.strokeStyle = color; 
+    ctx.lineWidth = 5; 
+    ctx.lineCap = "round"; 
+    ctx.lineJoin = "round";
+    
+    if (type === 'start') { 
+        ctx.beginPath(); 
+        ctx.moveTo(x, y); 
+    }
+    else if (type === 'move') { 
+        ctx.lineTo(x, y); 
+        ctx.stroke(); 
+    }
+}
+
+// Egér (Asztali gép) - CSAK LOKÁLIS RAJZOLÁS!
+canvas.onmousedown = (e) => { isDrawing = true; drawLocal(e.offsetX, e.offsetY, 'start'); };
+canvas.onmousemove = (e) => { if(isDrawing) drawLocal(e.offsetX, e.offsetY, 'move'); };
+window.onmouseup = () => { isDrawing = false; ctx.beginPath(); };
+
+// Érintés (Mobil) - CSAK LOKÁLIS RAJZOLÁS!
+canvas.ontouchstart = (e) => { 
+    isDrawing = true; 
+    const r = canvas.getBoundingClientRect(); 
+    drawLocal(e.touches[0].clientX - r.left, e.touches[0].clientY - r.top, 'start'); 
+    if (e.cancelable) e.preventDefault(); 
+};
+canvas.ontouchmove = (e) => { 
+    if(isDrawing) { 
+        const r = canvas.getBoundingClientRect(); 
+        drawLocal(e.touches[0].clientX - r.left, e.touches[0].clientY - r.top, 'move'); 
+    }
+    if (e.cancelable) e.preventDefault(); 
+};
+window.ontouchend = () => { isDrawing = false; ctx.beginPath(); };
+
+function startKaland() {
+    document.getElementById('game-menu').style.display = 'none';
+    messageInput.value = '/kaland ';
+    messageInput.focus();
+}
+
+document.getElementById('game-btn').addEventListener('click', () => {
+    const menu = document.getElementById('game-menu');
+    menu.style.display = menu.style.display === 'flex' ? 'none' : 'flex';
+});
+document.addEventListener('click', (e) => {
+    if (!e.target.closest('#game-menu') && e.target.id !== 'game-btn') {
+        document.getElementById('game-menu').style.display = 'none';
+    }
+});
 </script>
 </body>
 </html>

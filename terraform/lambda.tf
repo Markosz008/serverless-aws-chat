@@ -36,6 +36,11 @@ resource "aws_iam_role_policy" "lambda_policy" {
         Resource = "arn:aws:logs:*:*:*"
       },
       {
+          Effect = "Allow"
+          Action = ["bedrock:InvokeModel"]
+          Resource = "*"
+        },
+      {
         # DynamoDB: Most már mind a HÁROM táblát éri
         Effect = "Allow"
         Action = [
@@ -74,6 +79,8 @@ resource "aws_lambda_function" "websocket_handler" {
   handler          = "app.lambda_handler"
   source_code_hash = data.archive_file.lambda_zip.output_base64sha256
   runtime          = "python3.9"
+
+  timeout = 30
 
   environment {
     variables = {
