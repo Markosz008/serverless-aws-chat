@@ -7,6 +7,7 @@
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#232f3e">
 <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/134/134808.png">
+<script type="module" src="https://cdn.jsdelivr.net/npm/emoji-picker-element@^1/index.js"></script>
 <style>
 :root {
 --bg-color: #f0f2f5; --container-bg: white; --text-color: #333;
@@ -75,10 +76,15 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; height: var(--app
 .reaction-menu span:hover { transform: scale(1.3); }
 
 /* Játék Menü */
-#game-menu { display: none; position: absolute; background: var(--container-bg); border: 1px solid var(--border-color); border-radius: 15px; padding: 5px 0; box-shadow: 0 -4px 15px rgba(0,0,0,0.2); z-index: 9000; flex-direction: column; bottom: 65px; right: 10px; }
+#game-menu { display: none; position: absolute; background: var(--container-bg); border: 1px solid var(--border-color); border-radius: 15px; padding: 5px 0; box-shadow: 0 -4px 15px rgba(0,0,0,0.2); z-index: 9000; flex-direction: column; bottom: 65px; left: 100px; }
 #game-menu div { padding: 12px 20px; cursor: pointer; font-weight: bold; color: var(--text-color); border-bottom: 1px solid var(--border-color); }
 #game-menu div:last-child { border-bottom: none; }
 #game-menu div:hover { background: rgba(255,153,0,0.1); color: #ff9900; }
+
+/* JAVÍTOTT: Emoji Picker Popup a jobb oldalra! */
+#emoji-picker-container { display: none; position: absolute; bottom: 65px; right: 90px; z-index: 9000; box-shadow: 0 -4px 15px rgba(0,0,0,0.2); border-radius: 10px; overflow: hidden; background: var(--container-bg); }
+emoji-picker { width: 300px; height: 350px; --background: var(--container-bg); --border-color: var(--border-color); --category-font-color: var(--text-color); }
+@media (max-width: 400px) { emoji-picker { width: 100vw; height: 300px; } #emoji-picker-container { left: 0; right: 0; bottom: 55px; border-radius: 0; } }
 
 /* Rajztábla UI */
 #whiteboard-container { display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: var(--bg-color); z-index: 8500; flex-direction: column; align-items: center; justify-content: flex-start; }
@@ -109,7 +115,13 @@ audio { max-width: 220px; height: 40px; margin-top: 5px; outline: none; }
 [data-theme="dark"] .file-link:hover { background: rgba(255,255,255,0.2); }
 
 #input-area { display: flex; align-items: center; padding: 10px; background: var(--input-bg); border-top: 1px solid var(--border-color); position: relative; flex-shrink: 0; box-sizing: border-box; padding-bottom: calc(15px + env(safe-area-inset-bottom, 0px)); }
-#message-input { flex: 1; padding: 10px 15px; border: 1px solid var(--border-color); border-radius: 20px; outline: none; background: var(--container-bg); color: var(--text-color); font-size: 16px; }
+
+/* JAVÍTOTT: Belső Emoji gomb és Input mező formázás */
+.input-wrapper { flex: 1; display: flex; align-items: center; border: 1px solid var(--border-color); border-radius: 20px; background: var(--container-bg); margin-left: 5px; }
+#message-input { flex: 1; padding: 10px 10px 10px 15px; border: none; outline: none; background: transparent; color: var(--text-color); font-size: 16px; min-width: 0; }
+#emoji-btn { margin-right: 5px; padding: 2px 5px; font-size: 18px; opacity: 0.7; transition: 0.2s; }
+#emoji-btn:hover { opacity: 1; transform: scale(1.1); }
+
 #send-btn { background: #ff9900; color: white; border: none; padding: 10px 15px; margin-left: 8px; border-radius: 20px; cursor: pointer; font-weight: bold; white-space: nowrap;}
 .icon-btn { background: none; border: none; font-size: 20px; cursor: pointer; padding: 5px; margin: 0 1px; }
 
@@ -130,7 +142,6 @@ audio { max-width: 220px; height: 40px; margin-top: 5px; outline: none; }
 .video-btn { border: none; padding: 12px 20px; border-radius: 30px; font-weight: bold; font-size: 14px; cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: center; color: white; transition: 0.2s; }
 .video-btn:active { transform: scale(0.95); }
 
-/* --- JAVÍTOTT MOBIL NÉZET: ELFÉR MINDEN GOMB! --- */
 @media (max-width: 650px) {
 #app-container { flex-direction: column; }
 #sidebar { width: 100%; height: auto; max-height: 120px; border-right: none; border-bottom: 1px solid var(--border-color); display: flex; flex-direction: column;}
@@ -144,10 +155,12 @@ audio { max-width: 220px; height: 40px; margin-top: 5px; outline: none; }
 .desktop-react-btn, .desktop-reply-btn { display: none !important; }
 
 /* Kisebb ikonok és gombok a mobil beviteli sávban */
-#input-area { padding: 8px 5px !important; padding-bottom: calc(8px + env(safe-area-inset-bottom, 0px)) !important; }
-.icon-btn { font-size: 19px; padding: 3px; margin: 0 1px; }
-#message-input { padding: 8px 10px; font-size: 15px; border-radius: 18px; }
-#send-btn { padding: 8px 12px; font-size: 14px; margin-left: 5px; border-radius: 18px; }
+#input-area { padding: 8px 3px !important; padding-bottom: calc(8px + env(safe-area-inset-bottom, 0px)) !important; }
+.icon-btn { font-size: 17px; padding: 2px; margin: 0 1px; }
+.input-wrapper { margin-left: 2px; }
+#message-input { padding: 8px 5px 8px 12px; font-size: 14px; }
+#emoji-btn { font-size: 16px; margin-right: 2px; }
+#send-btn { padding: 8px 10px; font-size: 13px; margin-left: 3px; border-radius: 18px; }
 }
 
 .header-btn { font-size: 12px; padding: 5px 10px; border-radius: 15px; border: 1px solid #ff9900; background: transparent; color: #ff9900; cursor: pointer; margin-left: 5px; }
@@ -172,6 +185,10 @@ audio { max-width: 220px; height: 40px; margin-top: 5px; outline: none; }
 <span onclick="sendEmojiReact('🔥')">🔥</span>
 <div style="width: 1px; background: var(--border-color); height: 30px; margin: 0 5px;"></div>
 <span onclick="initiateReplyFromMenu()">↩️</span>
+</div>
+
+<div id="emoji-picker-container">
+    <emoji-picker></emoji-picker>
 </div>
 
 <div id="whiteboard-container">
@@ -247,7 +264,12 @@ audio { max-width: 220px; height: 40px; margin-top: 5px; outline: none; }
 </div>
 
 <input type="file" id="file-input" multiple style="display:none">
-<input type="text" id="message-input" placeholder="Üzenet..." disabled>
+
+<div class="input-wrapper">
+    <input type="text" id="message-input" placeholder="Üzenet..." disabled>
+    <button class="icon-btn" id="emoji-btn" disabled>😀</button>
+</div>
+
 <button id="send-btn" disabled>Küldés</button>
 </div>
 </div>
@@ -413,7 +435,8 @@ function connectToChat() {
     clearTimeout(reconnectTimer); socket = new WebSocket(WSS_URL);
     socket.onopen = () => {
         socket.send(JSON.stringify({ action: 'join', username: myUsername, room: currentRoom, password: currentRoomPassword }));
-        [messageInput, sendBtn, cameraBtn, uploadBtn, micBtn, document.getElementById('game-btn')].forEach(el => el.disabled = false); sendBtn.innerText = "Küldés"; messageInput.placeholder = "Üzenet...";
+        [messageInput, sendBtn, cameraBtn, uploadBtn, micBtn, document.getElementById('game-btn'), document.getElementById('emoji-btn')].forEach(el => el.disabled = false); 
+        sendBtn.innerText = "Küldés"; messageInput.placeholder = "Üzenet...";
         renderSavedRooms();
         
         if (document.visibilityState === 'visible' && unreadMsgQueue.length > 0) {
@@ -422,7 +445,8 @@ function connectToChat() {
         }
     };
     socket.onclose = () => {
-        [messageInput, sendBtn, cameraBtn, uploadBtn, micBtn, document.getElementById('game-btn')].forEach(el => el.disabled = true); sendBtn.innerText = "Csatlakozás..."; messageInput.placeholder = "Kapcsolat megszakadt...";
+        [messageInput, sendBtn, cameraBtn, uploadBtn, micBtn, document.getElementById('game-btn'), document.getElementById('emoji-btn')].forEach(el => el.disabled = true); 
+        sendBtn.innerText = "Csatlakozás..."; messageInput.placeholder = "Kapcsolat megszakadt...";
         reconnectTimer = setTimeout(connectToChat, 2000);
     };
     socket.onerror = (error) => { socket.close(); };
@@ -508,7 +532,7 @@ micBtn.addEventListener('click', async () => {
                 else if (finalMimeType.includes('ogg')) ext = 'ogg';
                 const audioBlob = new Blob(audioChunks, { type: finalMimeType });
                 const audioFile = new File([audioBlob], "VoiceNote_" + Math.floor(Date.now()/1000) + "." + ext, { type: finalMimeType });
-                let currentReply = replyingTo ? { sender: replyingTo.sender, message: replyingTo.text } : null;
+                let currentReply = replyingTo ? { sender: replyingTo.sender, message: replyingTo.message } : null;
                 uploadQueue.push({ file: audioFile, replyTo: currentReply });
                 cancelReply(); if (!isUploading) processNextFile();
                 audioChunks = []; stream.getTracks().forEach(track => track.stop());
@@ -525,7 +549,7 @@ micBtn.addEventListener('click', async () => {
 });
 
 function initiateReply(sender, text) { 
-    replyingTo = { sender, text }; 
+    replyingTo = { sender: sender, message: text }; 
     const dispName = sender.split('|')[0];
     const previewText = text.includes('.amazonaws.com/') ? "📸 [Fájl/Hang]" : text; 
     document.getElementById('reply-preview-sender').innerText = 'Válasz neki: ' + dispName; 
@@ -563,7 +587,7 @@ function performUpload(uploadUrl, fileUrl) {
 
 uploadBtn.addEventListener('click', () => { fileInput.removeAttribute('capture'); fileInput.click(); });
 cameraBtn.addEventListener('click', () => { fileInput.setAttribute('capture', 'environment'); fileInput.click(); });
-fileInput.addEventListener('change', (e) => { let currentReply = replyingTo ? { sender: replyingTo.sender, message: replyingTo.text } : null; for(let i=0; i < e.target.files.length; i++) { uploadQueue.push({ file: e.target.files[i], replyTo: currentReply }); } cancelReply(); if (!isUploading) processNextFile(); });
+fileInput.addEventListener('change', (e) => { let currentReply = replyingTo ? { sender: replyingTo.sender, message: replyingTo.message } : null; for(let i=0; i < e.target.files.length; i++) { uploadQueue.push({ file: e.target.files[i], replyTo: currentReply }); } cancelReply(); if (!isUploading) processNextFile(); });
 
 function updateUserList(users) { 
     userListUl.innerHTML = ''; 
@@ -622,7 +646,12 @@ function addMessage(text, isSystem = false, sender = '', isMine = false, msgId =
     const msgDiv = document.createElement('div'); msgDiv.className = isSystem ? 'message system' : 'message ' + (isMine ? 'mine' : 'others');
     
     let contentHTML = ''; if (sender && !isMine) contentHTML += '<span class="sender-name">' + dispName + '</span>';
-    if (replyTo) { const previewText = replyTo.message.includes('.amazonaws.com/') ? "📸 [Fájl/Hang]" : replyTo.message; contentHTML += '<div class="quoted-msg"><strong>' + replyTo.sender.split('|')[0] + '</strong><br><span>' + previewText + '</span></div>'; }
+    
+    if (replyTo) { 
+        const previewText = replyTo.message.includes('.amazonaws.com/') ? "📸 [Fájl/Hang]" : replyTo.message; 
+        contentHTML += '<div class="quoted-msg"><strong>' + replyTo.sender.split('|')[0] + '</strong><br><span>' + previewText + '</span></div>'; 
+    }
+    
     if (text.includes('.amazonaws.com/')) {
         const urlParts = text.split('/'); const fullFileName = urlParts[urlParts.length - 1]; const originalName = fullFileName.split('_').slice(1).join('_') || "Fájl"; const ext = originalName.split('.').pop().toLowerCase(); 
         const imgExts = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'heic']; const audioExts = ['mp3', 'wav', 'ogg', 'webm', 'm4a', 'aac', 'mp4'];
@@ -664,7 +693,7 @@ function sendMessage() {
         addMessage(text, false, myUsername, true, tempId, replyingTo, null, 'pending');
         if (socket.readyState === WebSocket.OPEN) {
             const payload = { action: 'sendMessage', message: text, username: myUsername, deviceId: myDeviceId, room: currentRoom, tempId: tempId };
-            if (replyingTo) { payload.replyTo = { sender: replyingTo.sender, message: replyingTo.text }; }
+            if (replyingTo) { payload.replyTo = { sender: replyingTo.sender, message: replyingTo.message }; }
             socket.send(JSON.stringify(payload)); 
             setTimeout(() => { const statEl = document.getElementById('status-' + tempId); if (statEl && statEl.innerText === '🕒') { statEl.innerText = '❌'; statEl.style.color = '#ff3b30'; } }, 8000);
         } else { setTimeout(() => { const statEl = document.getElementById('status-' + tempId); if (statEl) { statEl.innerText = '❌'; statEl.style.color = '#ff3b30'; } }, 100); }
@@ -727,9 +756,23 @@ function endCallLocal() {
     const localVid = document.getElementById('local-video'); if(localVid) { localVid.style.opacity = '1'; }
 }
 
-// ==========================================
-// 🚀 ZSENIÁLIS "RAJZ ÉS KÜLDÉS KÉPKÉNT" LOGIKA 🚀
-// ==========================================
+const emojiBtn = document.getElementById('emoji-btn');
+const emojiContainer = document.getElementById('emoji-picker-container');
+const picker = document.querySelector('emoji-picker');
+
+emojiBtn.addEventListener('click', () => {
+    emojiContainer.style.display = emojiContainer.style.display === 'block' ? 'none' : 'block';
+    document.getElementById('game-menu').style.display = 'none'; 
+});
+
+picker.addEventListener('emoji-click', event => {
+    const cursorPosition = messageInput.selectionStart;
+    const textBefore = messageInput.value.substring(0, cursorPosition);
+    const textAfter = messageInput.value.substring(cursorPosition);
+    messageInput.value = textBefore + event.detail.unicode + textAfter;
+    messageInput.selectionStart = messageInput.selectionEnd = cursorPosition + event.detail.unicode.length;
+    messageInput.focus();
+});
 
 const canvas = document.getElementById('drawing-board');
 const ctx = canvas.getContext('2d');
@@ -740,11 +783,8 @@ function resizeCanvas() {
     if (!container || container.style.display === 'none') return;
     const headerHeight = document.getElementById('whiteboard-header').offsetHeight || 50;
     
-    // Vászon méretezése
     canvas.width = window.innerWidth; 
     canvas.height = window.innerHeight - headerHeight; 
-    
-    // Fehér háttér, hogy a kép ne legyen átlátszó (Sötét módban is látszódjon a cseten!)
     ctx.fillStyle = "white";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 }
@@ -761,22 +801,15 @@ function clearBoard() {
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 }
 
-// --- ÚJ FUNKCIÓ: Rajz elküldése képként az Amazon S3-ba ---
 function sendDrawingAsImage() {
-    // 1. Kiszedjük a rajzot kép (PNG) formátumban
     const dataUrl = canvas.toDataURL('image/png');
-    
-    // 2. Szép animáció gombnyomásra
     closeWhiteboard();
-    
-    // 3. Kép Blob konvertálása és bedobása a feltöltési sorba (S3)
-    fetch(dataUrl)
-        .then(res => res.blob())
-        .then(blob => {
-            const file = new File([blob], "Rajz_" + Math.floor(Date.now()/1000) + ".png", { type: 'image/png' });
-            uploadQueue.push({ file: file, replyTo: null });
-            if (!isUploading) processNextFile();
-        });
+    fetch(dataUrl).then(res => res.blob()).then(blob => {
+        const file = new File([blob], "Rajz_" + Math.floor(Date.now()/1000) + ".png", { type: 'image/png' });
+        let currentReply = replyingTo ? { sender: replyingTo.sender, message: replyingTo.message } : null;
+        uploadQueue.push({ file: file, replyTo: currentReply });
+        if (!isUploading) processNextFile();
+    });
 }
 
 function drawLocal(x, y, type) {
@@ -786,22 +819,14 @@ function drawLocal(x, y, type) {
     ctx.lineCap = "round"; 
     ctx.lineJoin = "round";
     
-    if (type === 'start') { 
-        ctx.beginPath(); 
-        ctx.moveTo(x, y); 
-    }
-    else if (type === 'move') { 
-        ctx.lineTo(x, y); 
-        ctx.stroke(); 
-    }
+    if (type === 'start') { ctx.beginPath(); ctx.moveTo(x, y); }
+    else if (type === 'move') { ctx.lineTo(x, y); ctx.stroke(); }
 }
 
-// Egér (Asztali gép) - CSAK LOKÁLIS RAJZOLÁS!
 canvas.onmousedown = (e) => { isDrawing = true; drawLocal(e.offsetX, e.offsetY, 'start'); };
 canvas.onmousemove = (e) => { if(isDrawing) drawLocal(e.offsetX, e.offsetY, 'move'); };
 window.onmouseup = () => { isDrawing = false; ctx.beginPath(); };
 
-// Érintés (Mobil) - CSAK LOKÁLIS RAJZOLÁS!
 canvas.ontouchstart = (e) => { 
     isDrawing = true; 
     const r = canvas.getBoundingClientRect(); 
@@ -826,10 +851,15 @@ function startKaland() {
 document.getElementById('game-btn').addEventListener('click', () => {
     const menu = document.getElementById('game-menu');
     menu.style.display = menu.style.display === 'flex' ? 'none' : 'flex';
+    emojiContainer.style.display = 'none'; 
 });
+
 document.addEventListener('click', (e) => {
     if (!e.target.closest('#game-menu') && e.target.id !== 'game-btn') {
         document.getElementById('game-menu').style.display = 'none';
+    }
+    if (!e.target.closest('emoji-picker') && !e.target.closest('#emoji-btn')) {
+        emojiContainer.style.display = 'none';
     }
 });
 </script>
