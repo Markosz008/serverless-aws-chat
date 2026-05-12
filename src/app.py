@@ -144,19 +144,57 @@ def lambda_handler(event, context):
             if reply_to: payload['replyTo'] = reply_to
             if apigw_management: broadcast(apigw_management, payload, room)
 
-        # --- ÚJ: WebRTC Célzott hívás (Signaling) ---
+            # --- AI Kalandmester hívás ---
+            if message.strip().startswith('/kaland'):
+                prompt = message.replace('/kaland', '').strip()
+                ai_message = ""
+                try:
+                    bedrock = boto3.client('bedrock-runtime', region_name='eu-central-1')
+                    model_arn = 'arn:aws:bedrock:eu-central-1:682356774927:inference-profile/eu.anthropic.claude-haiku-4-5-20251001-v1:0'
+                    
+                    messages_payload = [{"role": "user", "content": [{"text": f"Te egy magyar nyelvű humoros, titokzatos Kalandmester (Dungeon Master) vagy. Egy játékos ezt lépi a kalandban: '{prompt}'. Reagálj rá izgalmasan, fantázia stílusban maximum 3 mondatban, és tegyél fel neki egy újabb kérdést vagy kihívást!"}]}]
+                    
+                    resp = bedrock.converse(
+                        modelId=model_arn,
+                        messages=messages_payload,
+                        inferenceConfig={"maxTokens": 400}
+                    )
+                    ai_message = resp['output']['message']['content'][0]['text']
+                    
+                except Exception as e:
+                    print(f"BEDROCK HIBA: {str(e)}")
+                    ai_message = f"🧙‍♂️ Rendszerhiba... (A kód megállt! Van 30mp a lambda.tf timeoutban?) Részlet: {str(e)[:50]}"
+                
+                ai_msg_id = str(uuid.uuid4())
+                ai_timestamp = timestamp + 1
+                ai_sender = "🧙‍♂️ Kalandmester|ai"
+                ai_item = {
+                    'room': {'S': room}, 'timestamp': {'N': str(ai_timestamp)}, 'msgId': {'S': ai_msg_id},
+                    'sender': {'S': ai_sender}, 'deviceId': {'S': 'AI_BOT'}, 'message': {'S': ai_message}, 
+                    'expiresAt': {'N': str(expires_at)}, 'isRead': {'BOOL': False}
+                }
+                dynamodb.put_item(TableName=MESSAGES_TABLE, Item=ai_item)
+                if apigw_management: broadcast(apigw_management, {'type': 'chat', 'msgId': ai_msg_id, 'sender': ai_sender, 'deviceId': 'AI_BOT', 'message': ai_message, 'timestamp': ai_timestamp}, room)
+
+        # --- JAVÍTVA: Visszatértünk a klasszikus rajz formátumhoz ---
+        elif action == 'draw':
+            room = body.get('room', 'main')
+            payload = {
+                'type': 'draw', 
+                'sender': body.get('username'), 
+                'x': body.get('x'), 
+                'y': body.get('y'), 
+                'color': body.get('color'), 
+                'drawType': body.get('drawType')
+            }
+            if apigw_management: broadcast(apigw_management, payload, room)
+
         elif action == 'webrtcSignal':
             target_user = body.get('targetUser')
             sender = body.get('username')
             room = body.get('room', 'main')
-            payload = {
-                'type': 'webrtcSignal',
-                'sender': sender,
-                'deviceId': body.get('deviceId'),
-                'signal': body.get('signal')
-            }
+            payload = {'type': 'webrtcSignal', 'sender': sender, 'deviceId': body.get('deviceId'), 'signal': body.get('signal')}
             if apigw_management:
-                # Kikeressük a célzott felhasználó kapcsolatát
                 conns = dynamodb.scan(TableName=CONNECTIONS_TABLE).get('Items', [])
                 for c in conns:
                     if c.get('username', {}).get('S') == target_user and c.get('room', {}).get('S', 'main') == room:
@@ -183,7 +221,7 @@ def lambda_handler(event, context):
                 safe_name = f"{uuid.uuid4()}_{body.get('fileName', 'file')}"
                 url = boto3.client('s3', region_name='eu-central-1', config=Config(signature_version='s3v4', s3={'addressing_style': 'path'})).generate_presigned_url('put_object', Params={'Bucket': IMAGE_BUCKET, 'Key': safe_name, 'ContentType': body.get('contentType', 'application/octet-stream')}, ExpiresIn=300)
                 if apigw_management: apigw_management.post_to_connection(ConnectionId=connection_id, Data=json.dumps({'uploadUrl': url, 'fileUrl': f"https://s3.eu-central-1.amazonaws.com/{IMAGE_BUCKET}/{safe_name}"}))
-            except: pass
+            except Exception as e: print(f"S3 Hiba: {str(e)}")
 
         return {'statusCode': 200}
     return {'statusCode': 400}
