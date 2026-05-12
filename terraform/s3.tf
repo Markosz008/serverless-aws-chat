@@ -96,7 +96,7 @@ resource "aws_s3_bucket_cors_configuration" "chat_cors" {
     # Az S3-nál a PUT/POST engedélyezése automatikusan kezeli a preflight OPTIONS kérést.
     allowed_methods = ["GET", "PUT", "POST", "HEAD"]
     allowed_origins = ["*"]
-    expose_headers  = ["ETag", "Location", "Access-Control-Allow-Origin"]
+    expose_headers  = ["ETag"]
     max_age_seconds = 3600
   }
 }
@@ -123,4 +123,55 @@ output "website_url" {
 
 output "image_bucket_name" {
   value = aws_s3_bucket.chat_images.id
+}
+
+# --- ÚJ: PWA Manifest fájl az Appá alakításhoz ---
+resource "aws_s3_object" "manifest_json" {
+  bucket       = aws_s3_bucket.frontend_bucket.id
+  key          = "manifest.json"
+  content_type = "application/json"
+  content      = jsonencode({
+    name             = "AWS Chat"
+    short_name       = "Chat"
+    start_url        = "/"
+    display          = "standalone"
+    background_color = "#232f3e"
+    theme_color      = "#232f3e"
+    icons = [
+      {
+        # Ingyenes placeholder ikon a webről
+        src   = "https://cdn-icons-png.flaticon.com/512/134/134808.png"
+        sizes = "512x512"
+        type  = "image/png"
+      }
+    ]
+  })
+}
+
+# --- ÚJ: Service Worker a PWA működéséhez ---
+resource "aws_s3_object" "service_worker" {
+  bucket       = aws_s3_bucket.frontend_bucket.id
+  key          = "sw.js"
+  content_type = "application/javascript"
+  content      = <<-EOT
+    self.addEventListener('install', (e) => {
+      console.log('[ServiceWorker] Telepítve a háttérben');
+      self.skipWaiting();
+    });
+    self.addEventListener('fetch', (e) => {
+      // Egyelőre mindent átengedünk a hálózaton (nem cache-elünk agresszíven)
+    });
+  EOT
+}
+
+resource "null_resource" "cloudfront_invalidation" {
+  triggers = {
+    # Ez figyeli, hogy változott-e az index.html kódja
+    html_hash = filemd5("${path.module}/../index.html.tpl")
+  }
+
+  provisioner "local-exec" {
+    # FONTOS: Cseréld ki a DISTRIBUTION_ID_IDE_JON részt a saját CloudFront ID-dra!
+    command = "aws cloudfront create-invalidation --distribution-id ESV32IXWM4EHZ --paths '/*'"
+  }
 }

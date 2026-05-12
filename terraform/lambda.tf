@@ -31,36 +31,36 @@ resource "aws_iam_role_policy" "lambda_policy" {
     Version = "2012-10-17"
     Statement = [
       {
-        # CloudWatch Logs: Hogy lássuk a hibákat a naplóban
         Effect = "Allow"
         Action = ["logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents"]
         Resource = "arn:aws:logs:*:*:*"
       },
       {
-        # DynamoDB: A felhasználók és kapcsolatok kezeléséhez
+        # DynamoDB: Most már mind a HÁROM táblát éri
         Effect = "Allow"
-        Action = ["dynamodb:PutItem", "dynamodb:DeleteItem", "dynamodb:Scan", "dynamodb:UpdateItem"]
-        Resource = aws_dynamodb_table.websocket_connections.arn
+        Action = [
+          "dynamodb:PutItem", 
+          "dynamodb:GetItem", 
+          "dynamodb:DeleteItem", 
+          "dynamodb:Scan", 
+          "dynamodb:UpdateItem",
+          "dynamodb:Query"
+        ]
+        Resource = [
+          aws_dynamodb_table.websocket_connections.arn,
+          aws_dynamodb_table.messages_table.arn,
+          aws_dynamodb_table.rooms_table.arn
+        ]
       },
       {
-        # API Gateway: Üzenetek visszaküldése a klienseknek (JAVÍTVA)
         Effect = "Allow"
         Action = ["execute-api:ManageConnections"]
         Resource = "arn:aws:execute-api:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:*/*"
       },
       {
-        # S3: Képfeltöltési linkek és fájlok kezelése (JAVÍTVA)
         Effect = "Allow",
-        Action = [
-          "s3:PutObject",
-          "s3:PutObjectAcl",
-          "s3:GetObject",
-          "s3:ListBucket"
-        ],
-        Resource = [
-          "${aws_s3_bucket.chat_images.arn}",
-          "${aws_s3_bucket.chat_images.arn}/*"
-        ]
+        Action = ["s3:PutObject", "s3:PutObjectAcl", "s3:GetObject", "s3:ListBucket"],
+        Resource = ["${aws_s3_bucket.chat_images.arn}", "${aws_s3_bucket.chat_images.arn}/*"]
       }
     ]
   })
@@ -77,8 +77,10 @@ resource "aws_lambda_function" "websocket_handler" {
 
   environment {
     variables = {
-      TABLE_NAME   = aws_dynamodb_table.websocket_connections.name
-      IMAGE_BUCKET = aws_s3_bucket.chat_images.id
+      CONNECTIONS_TABLE = aws_dynamodb_table.websocket_connections.name
+      MESSAGES_TABLE    = aws_dynamodb_table.messages_table.name
+      ROOMS_TABLE       = aws_dynamodb_table.rooms_table.name
+      IMAGE_BUCKET      = aws_s3_bucket.chat_images.id
     }
   }
 }
