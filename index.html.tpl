@@ -35,7 +35,7 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; height: var(--app
 #room-list { flex: 0.6; border-bottom: 2px solid rgba(0,0,0,0.2); background: rgba(0,0,0,0.05); }
 
 #user-list li { padding: 10px 15px; font-size: 14px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.05); }
-#user-list li span.user-name::before { content: "●"; color: #44ff44; margin-right: 10px; font-size: 18px; }
+#user-list li span.user-name::before { display: none; }
 
 .room-item { padding: 12px 15px; font-size: 14px; display: flex; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.05); cursor: pointer; transition: 0.2s; position: relative; }
 .room-item:hover { background: rgba(255,153,0,0.15); color: #ff9900; }
@@ -56,7 +56,12 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; height: var(--app
 .link-card-title { font-weight: bold; margin-bottom: 4px; display: block; color: #ff9900; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .link-card-desc { opacity: 0.8; font-size: 11px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 
-.message-wrapper { display: flex; flex-direction: column; width: 100%; margin-bottom: 5px; }
+/* AVATAR CSS */
+.message-row { display: flex; align-items: flex-end; gap: 8px; margin-bottom: 5px; width: 100%; }
+.message-row.mine { flex-direction: row-reverse; }
+.avatar-img { width: 32px; height: 32px; border-radius: 50%; flex-shrink: 0; box-shadow: 0 2px 5px rgba(0,0,0,0.15); background: #eee; }
+.message-wrapper { flex: 1; display: flex; flex-direction: column; }
+
 .mine-wrapper { align-items: flex-end; }
 .others-wrapper { align-items: flex-start; }
 .reaction-container { display: flex; flex-wrap: wrap; gap: 4px; margin-top: -8px; z-index: 5; padding: 0 10px; }
@@ -81,8 +86,8 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; height: var(--app
 audio { max-width: 220px; height: 40px; margin-top: 5px; outline: none; }
 
 .message.system { background: transparent; color: var(--system-text); font-size: 0.85em; text-align: center; align-self: center; margin: 5px 0; }
-.message.mine { background: var(--mine-msg); color: var(--mine-text); align-self: flex-end; border-bottom-right-radius: 3px; }
-.message.others { background: var(--others-msg); color: var(--others-text); align-self: flex-start; border-bottom-left-radius: 3px; }
+.message.mine { background: var(--mine-msg); color: var(--mine-text); border-bottom-right-radius: 3px; }
+.message.others { background: var(--others-msg); color: var(--others-text); border-bottom-left-radius: 3px; }
 .message.others .sender-name { font-size: 0.75em; font-weight: bold; opacity: 0.8; margin-bottom: 4px; display: block; }
 .quoted-msg { background: rgba(0,0,0,0.1); border-left: 4px solid rgba(0,0,0,0.3); padding: 6px 10px; border-radius: 5px; margin-bottom: 8px; font-size: 0.85em; opacity: 0.85; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; white-space: normal; }
 [data-theme="dark"] .quoted-msg { background: rgba(255,255,255,0.1); border-left-color: rgba(255,255,255,0.3); }
@@ -105,13 +110,11 @@ audio { max-width: 220px; height: 40px; margin-top: 5px; outline: none; }
 #lightbox img { max-width: 95%; max-height: 95%; border-radius: 5px; }
 #lightbox-close { position: absolute; top: 20px; right: 20px; color: white; font-size: 40px; cursor: pointer; font-weight: bold; }
 
-/* --- WEBRTC UI JAVÍTOTT --- */
 .call-user-btn { background: rgba(255,153,0,0.2); border: 1px solid #ff9900; border-radius: 50%; padding: 4px; font-size: 12px; cursor: pointer; display: flex; align-items: center; justify-content: center; width: 26px; height: 26px; transition: 0.2s; margin-left: auto; }
 .call-user-btn:hover { background: #ff9900; color: white; transform: scale(1.1); }
-#video-container { display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: #111; z-index: 9999; flex-direction: column; justify-content: center; align-items: center; }
+#video-container { display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: #000; z-index: 9999; flex-direction: column; justify-content: center; align-items: center; }
 #remote-video { width: 100%; height: 100%; object-fit: cover; z-index: 10000; }
 #local-video { position: absolute; bottom: 100px; right: 20px; width: 100px; height: 150px; object-fit: cover; border: 2px solid white; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.5); background: #333; transition: opacity 0.3s; z-index: 10001; }
-/* Ez a div tartja egymás mellett a gombokat */
 #video-controls { position: absolute; bottom: 30px; left: 0; width: 100%; display: flex; justify-content: center; gap: 15px; z-index: 10002; }
 .video-btn { border: none; padding: 12px 20px; border-radius: 30px; font-weight: bold; font-size: 14px; cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: center; color: white; transition: 0.2s; }
 .video-btn:active { transform: scale(0.95); }
@@ -121,12 +124,13 @@ audio { max-width: 220px; height: 40px; margin-top: 5px; outline: none; }
 #sidebar { width: 100%; height: auto; max-height: 120px; border-right: none; border-bottom: 1px solid var(--border-color); display: flex; flex-direction: column;}
 #sidebar h3 { display: none; }
 #user-list, #room-list { display: flex; flex-direction: row; overflow-x: auto; white-space: nowrap; padding: 8px; align-items: center; border-bottom: none; }
-#user-list li, .room-item { border-bottom: none; padding: 4px 10px; background: rgba(255,255,255,0.1); border-radius: 12px; margin-right: 6px; flex-shrink: 0; font-size: 12px; }
+#user-list li { border-bottom: none; padding: 4px 6px 4px 12px; background: rgba(255,255,255,0.1); border-radius: 16px; margin-right: 6px; flex-shrink: 0; font-size: 12px; display: flex; align-items: center; gap: 6px; }
+.room-item { border-bottom: none; padding: 4px 10px; background: rgba(255,255,255,0.1); border-radius: 12px; margin-right: 6px; flex-shrink: 0; font-size: 12px; }
 .room-item::before { display: none; }
+#user-list li span.user-name::before { display: none; } 
+.call-user-btn { margin-left: 5px; width: 22px; height: 22px; font-size: 10px; border: none; background: #ff9900; color: white; padding: 0; }
 .desktop-react-btn, .desktop-reply-btn { display: none !important; }
 #input-area { padding-bottom: 45px !important; }
-#user-list li span.user-name::before { display: none; }
-.call-user-btn { margin-left: 5px; width: 22px; height: 22px; font-size: 10px; border: none; background: #ff9900; color: white; padding: 0; }
 }
 
 .header-btn { font-size: 12px; padding: 5px 10px; border-radius: 15px; border: 1px solid #ff9900; background: transparent; color: #ff9900; cursor: pointer; margin-left: 5px; }
@@ -183,7 +187,8 @@ audio { max-width: 220px; height: 40px; margin-top: 5px; outline: none; }
         <div id="nav-notif">0</div>
     </div>
 <div style="display: flex; gap: 5px;">
-    <button id="room-btn" class="header-btn" style="border-color: #4CAF50; color: #4CAF50;">+ Szobaváltás</button>
+    <button id="avatar-btn" class="header-btn" style="border-color: #9c27b0; color: #9c27b0;">🎲 Avatar</button>
+    <button id="room-btn" class="header-btn" style="border-color: #4CAF50; color: #4CAF50;">+ Szoba</button>
     <button id="change-name-btn" class="header-btn" style="border-color: var(--header-text); color: var(--header-text);">Névváltás</button>
     <button id="theme-toggle" class="header-btn">Sötét mód</button>
 </div>
@@ -231,7 +236,7 @@ let unreadMsgQueue = [];
 let peerConnection; let localStream; let currentCallTarget = null;
 let isVideoEnabled = true; 
 const rtcConfig = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:stun1.l.google.com:19302' }] };
-let candidateQueue = []; // JAVÍTÁS: IP csomagok memóriája
+let candidateQueue = []; 
 
 function updateBadge() {
     if (unreadCount > 0) {
@@ -282,8 +287,13 @@ if (!myDeviceId) { myDeviceId = 'device-' + Math.random().toString(36).substr(2,
 const loginScreen = document.getElementById('login-screen'); const usernameInput = document.getElementById('username-input'); const joinBtn = document.getElementById('join-btn'); const messagesDiv = document.getElementById('messages'); const messageInput = document.getElementById('message-input'); const sendBtn = document.getElementById('send-btn'); const userListUl = document.getElementById('user-list'); const themeToggle = document.getElementById('theme-toggle'); const cameraBtn = document.getElementById('camera-btn'); const uploadBtn = document.getElementById('upload-btn'); const fileInput = document.getElementById('file-input'); const reactionMenu = document.getElementById('reaction-menu'); const menuOverlay = document.getElementById('menu-overlay'); const changeNameBtn = document.getElementById('change-name-btn'); const roomBtn = document.getElementById('room-btn'); const micBtn = document.getElementById('mic-btn');
 const typingDiv = document.getElementById('typing-indicator');
 
+// --- ÚJ: Biztonságos Login / Névbetöltés az Avatar Generátorhoz ---
 const savedName = localStorage.getItem('chatNickname');
-if (savedName) { myUsername = savedName; loginScreen.style.display = 'none'; connectToChat(); }
+if (savedName) { 
+    myUsername = savedName; 
+    if (!myUsername.includes('|')) { myUsername += '|' + Math.floor(Math.random() * 1000000); localStorage.setItem('chatNickname', myUsername); }
+    loginScreen.style.display = 'none'; connectToChat(); 
+}
 
 function isNameTaken(name) {
     let taken = false;
@@ -308,14 +318,32 @@ roomBtn.addEventListener('click', () => {
 });
 
 changeNameBtn.addEventListener('click', () => {
-    const newName = prompt("Írd be az új becenevedet:", myUsername);
-    if (newName && newName.trim() !== "" && newName.trim() !== myUsername) {
+    const oldDisp = myUsername.split('|')[0];
+    const oldSeed = myUsername.split('|')[1] || Math.floor(Math.random() * 1000000);
+    const newName = prompt("Írd be az új becenevedet:", oldDisp);
+    if (newName && newName.trim() !== "" && newName.trim() !== oldDisp) {
         const cleanName = newName.trim();
         if (isNameTaken(cleanName)) { alert("Ez a név már foglalt ebben a szobában! Kérlek válassz másikat."); return; }
-        myUsername = cleanName; localStorage.setItem('chatNickname', myUsername); 
+        myUsername = cleanName + '|' + oldSeed; 
+        localStorage.setItem('chatNickname', myUsername); 
         if (socket && socket.readyState === WebSocket.OPEN) { socket.send(JSON.stringify({ action: 'join', username: myUsername, room: currentRoom, password: currentRoomPassword })); }
-        addMessage("Sikeresen átírtad a neved erre: " + myUsername, true);
+        addMessage("Sikeresen átírtad a neved erre: " + cleanName, true);
     }
+});
+
+// --- ÚJ: 🎲 Avatar Pörgető Gomb ---
+document.getElementById('avatar-btn').addEventListener('click', () => {
+    const dispName = myUsername.split('|')[0];
+    const newSeed = Math.floor(Math.random() * 1000000);
+    myUsername = dispName + '|' + newSeed;
+    localStorage.setItem('chatNickname', myUsername);
+    if (socket && socket.readyState === WebSocket.OPEN) { 
+        socket.send(JSON.stringify({ action: 'join', username: myUsername, room: currentRoom, password: currentRoomPassword })); 
+    }
+    // Azonnali frissítés a már képernyőn lévő üzeneteken
+    document.querySelectorAll('.avatar-img').forEach(img => {
+        if (img.dataset.user === dispName) img.src = 'https://api.dicebear.com/7.x/avataaars/svg?seed=' + newSeed;
+    });
 });
 
 messageInput.addEventListener('focus', () => { setTimeout(() => { window.scrollTo(0, 0); document.body.scrollTop = 0; scrollToBottom(); }, 300); });
@@ -340,7 +368,10 @@ themeToggle.addEventListener('click', () => { const theme = document.documentEle
 
 joinBtn.addEventListener('click', () => {
     let rawName = usernameInput.value.trim() || "Anonim_" + Math.floor(Math.random() * 1000);
-    myUsername = rawName; localStorage.setItem('chatNickname', myUsername); loginScreen.style.display = 'none'; connectToChat();
+    myUsername = rawName + '|' + Math.floor(Math.random() * 1000000); 
+    localStorage.setItem('chatNickname', myUsername); 
+    loginScreen.style.display = 'none'; 
+    connectToChat();
 });
 
 function checkIfMine(msgSender, msgDeviceId) { if (msgDeviceId && msgDeviceId !== 'unknown') return msgDeviceId === myDeviceId; return msgSender === myUsername; }
@@ -375,7 +406,7 @@ function connectToChat() {
         else if (data.type === 'reaction') updateReactionUI(data.msgId, data.emoji, data.isAdd);
         else if (data.type === 'typing') {
             if (data.sender !== myUsername) {
-                typingDiv.innerText = data.sender + " éppen gépel...";
+                typingDiv.innerText = data.sender.split('|')[0] + " éppen gépel...";
                 typingDiv.style.opacity = data.typing ? "1" : "0";
             }
         }
@@ -460,7 +491,14 @@ micBtn.addEventListener('click', async () => {
     }
 });
 
-function initiateReply(sender, text) { replyingTo = { sender, text }; const previewText = text.includes('.amazonaws.com/') ? "📸 [Fájl/Hang]" : text; document.getElementById('reply-preview-sender').innerText = 'Válasz neki: ' + sender; document.getElementById('reply-preview-text').innerText = previewText; document.getElementById('reply-preview').style.display = 'flex'; messageInput.focus(); closeReactMenu(); }
+function initiateReply(sender, text) { 
+    replyingTo = { sender, text }; 
+    const dispName = sender.split('|')[0];
+    const previewText = text.includes('.amazonaws.com/') ? "📸 [Fájl/Hang]" : text; 
+    document.getElementById('reply-preview-sender').innerText = 'Válasz neki: ' + dispName; 
+    document.getElementById('reply-preview-text').innerText = previewText; 
+    document.getElementById('reply-preview').style.display = 'flex'; messageInput.focus(); closeReactMenu(); 
+}
 function initiateReplyFromMenu() { initiateReply(activeMsgSender, activeMsgText); }
 function cancelReply() { replyingTo = null; document.getElementById('reply-preview').style.display = 'none'; }
 
@@ -497,11 +535,26 @@ fileInput.addEventListener('change', (e) => { let currentReply = replyingTo ? { 
 function updateUserList(users) { 
     userListUl.innerHTML = ''; 
     users.forEach(user => { 
+        const dispName = user.split('|')[0];
+        const seed = user.split('|')[1] || user;
+
         const li = document.createElement('li'); 
+        
+        const leftGroup = document.createElement('div');
+        leftGroup.style.display = 'flex';
+        leftGroup.style.alignItems = 'center';
+
+        const avatar = document.createElement('img');
+        avatar.src = 'https://api.dicebear.com/7.x/avataaars/svg?seed=' + encodeURIComponent(seed);
+        avatar.style.width = '24px'; avatar.style.height = '24px'; avatar.style.borderRadius = '50%'; avatar.style.marginRight = '8px'; avatar.style.background = '#e0e0e0';
+
         const textSpan = document.createElement('span');
         textSpan.className = 'user-name';
-        textSpan.innerText = user + (user === myUsername ? " (Te)" : "");
-        li.appendChild(textSpan);
+        textSpan.innerText = dispName + (user === myUsername ? " (Te)" : "");
+        
+        leftGroup.appendChild(avatar);
+        leftGroup.appendChild(textSpan);
+        li.appendChild(leftGroup);
         
         if (user !== myUsername) {
             const callBtn = document.createElement('button');
@@ -521,12 +574,29 @@ function sendEmojiReact(emoji) { if (activeMsgId && socket.readyState === 1) { c
 function updateReactionUI(msgId, emoji, isAdd = true) { const cont = document.getElementById('reacts-' + msgId); if (!cont) return; let badge = cont.querySelector('[data-emoji="' + emoji + '"]'); let delta = isAdd ? 1 : -1; if (badge) { let count = parseInt(badge.getAttribute('data-count')) + delta; if (count <= 0) { badge.remove(); } else { badge.setAttribute('data-count', count); badge.innerText = emoji + ' ' + count; const key = msgId + ':' + emoji; if (myReactions.has(key)) badge.classList.add('reacted'); else badge.classList.remove('reacted'); } } else if (isAdd) { badge = document.createElement('span'); badge.className = 'reaction-badge'; badge.setAttribute('data-emoji', emoji); badge.setAttribute('data-count', '1'); badge.innerText = emoji + ' 1'; badge.onclick = () => { activeMsgId = msgId; sendEmojiReact(emoji); }; const key = msgId + ':' + emoji; if (myReactions.has(key)) badge.classList.add('reacted'); cont.appendChild(badge); } scrollToBottom(); }
 
 function addMessage(text, isSystem = false, sender = '', isMine = false, msgId = '', replyTo = null, linkPreview = null, status = 'sent') {
-    const wrapper = document.createElement('div'); wrapper.className = 'message-wrapper ' + (isMine ? 'mine-wrapper' : 'others-wrapper');
-    wrapper.id = 'wrap-' + msgId; 
+    let dispName = sender ? sender.split('|')[0] : '';
+    let seed = sender ? (sender.split('|')[1] || sender) : (myUsername.split('|')[1] || myUsername);
+
+    const row = document.createElement('div');
+    row.className = 'message-row ' + (isMine ? 'mine' : 'others');
+    row.id = 'wrap-' + msgId; 
+
+    if (!isSystem) {
+        const avatar = document.createElement('img');
+        avatar.className = 'avatar-img';
+        avatar.dataset.user = dispName; 
+        avatar.src = 'https://api.dicebear.com/7.x/avataaars/svg?seed=' + encodeURIComponent(seed);
+        if (isMine) avatar.style.display = 'none'; 
+        row.appendChild(avatar);
+    }
+
+    const wrapper = document.createElement('div'); 
+    wrapper.className = 'message-wrapper ' + (isMine ? 'mine-wrapper' : 'others-wrapper');
+    
     const msgDiv = document.createElement('div'); msgDiv.className = isSystem ? 'message system' : 'message ' + (isMine ? 'mine' : 'others');
     
-    let contentHTML = ''; if (sender && !isMine) contentHTML += '<span class="sender-name">' + sender + '</span>';
-    if (replyTo) { const previewText = replyTo.message.includes('.amazonaws.com/') ? "📸 [Fájl/Hang]" : replyTo.message; contentHTML += '<div class="quoted-msg"><strong>' + replyTo.sender + '</strong><br><span>' + previewText + '</span></div>'; }
+    let contentHTML = ''; if (sender && !isMine) contentHTML += '<span class="sender-name">' + dispName + '</span>';
+    if (replyTo) { const previewText = replyTo.message.includes('.amazonaws.com/') ? "📸 [Fájl/Hang]" : replyTo.message; contentHTML += '<div class="quoted-msg"><strong>' + replyTo.sender.split('|')[0] + '</strong><br><span>' + previewText + '</span></div>'; }
     if (text.includes('.amazonaws.com/')) {
         const urlParts = text.split('/'); const fullFileName = urlParts[urlParts.length - 1]; const originalName = fullFileName.split('_').slice(1).join('_') || "Fájl"; const ext = originalName.split('.').pop().toLowerCase(); 
         const imgExts = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'heic'];
@@ -562,7 +632,10 @@ function addMessage(text, isSystem = false, sender = '', isMine = false, msgId =
     
     wrapper.appendChild(msgDiv);
     if (!isSystem && msgId && status !== 'pending') { const rCont = document.createElement('div'); rCont.className = 'reaction-container'; rCont.id = 'reacts-' + msgId; wrapper.appendChild(rCont); }
-    messagesDiv.appendChild(wrapper); scrollToBottom();
+    
+    row.appendChild(wrapper);
+    messagesDiv.appendChild(row); 
+    scrollToBottom();
 }
 
 function sendMessage() {
@@ -596,14 +669,11 @@ function sendMessage() {
 sendBtn.addEventListener('click', sendMessage); messageInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') sendMessage(); });
 if ('serviceWorker' in navigator) { window.addEventListener('load', () => { navigator.serviceWorker.register('/sw.js').then(reg => console.log('App mód (PWA) aktív!', reg.scope)).catch(err => console.error('PWA hiba:', err)); }); }
 
-// ==========================================
-// 🚀 WEBRTC BOSS FIGHT (JAVÍTOTT MEMÓRIÁVAL ÉS KAMERA KI) 🚀
-// ==========================================
 async function startCall(targetUser) {
     currentCallTarget = targetUser;
     document.getElementById('video-container').style.display = 'flex';
     isVideoEnabled = true;
-    candidateQueue = []; // JAVÍTÁS: Ürítjük a memóriát az új híváshoz
+    candidateQueue = [];
     
     try {
         localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
@@ -632,14 +702,15 @@ async function startCall(targetUser) {
 
 async function handleWebRTCSignal(signal, sender) {
     if (signal.type === 'offer') {
-        if (!confirm(sender + " hívást indított! Felveszed? 📞")) {
+        const dispName = sender.split('|')[0];
+        if (!confirm(dispName + " hívást indított! Felveszed? 📞")) {
             socket.send(JSON.stringify({ action: 'webrtcSignal', room: currentRoom, username: myUsername, targetUser: sender, deviceId: myDeviceId, signal: { type: 'end' } }));
             return;
         }
         currentCallTarget = sender;
         document.getElementById('video-container').style.display = 'flex';
         isVideoEnabled = true;
-        candidateQueue = []; // JAVÍTÁS: Ürítjük a memóriát a fogadáshoz
+        candidateQueue = []; 
         
         try {
             localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
@@ -665,7 +736,6 @@ async function handleWebRTCSignal(signal, sender) {
             await peerConnection.setLocalDescription(answer);
             socket.send(JSON.stringify({ action: 'webrtcSignal', room: currentRoom, username: myUsername, targetUser: currentCallTarget, deviceId: myDeviceId, signal: { type: 'answer', answer: answer } }));
             
-            // JAVÍTÁS: A memóriában lévő várakozó csomagok betöltése
             candidateQueue.forEach(c => peerConnection.addIceCandidate(new RTCIceCandidate(c)).catch(e => console.log(e)));
             candidateQueue = [];
             
@@ -673,12 +743,10 @@ async function handleWebRTCSignal(signal, sender) {
     } 
     else if (signal.type === 'answer') { 
         await peerConnection.setRemoteDescription(new RTCSessionDescription(signal.answer)); 
-        // JAVÍTÁS: A memóriában lévő várakozó csomagok betöltése
         candidateQueue.forEach(c => peerConnection.addIceCandidate(new RTCIceCandidate(c)).catch(e => console.log(e)));
         candidateQueue = [];
     } 
     else if (signal.type === 'candidate') { 
-        // JAVÍTÁS: Ha még nincs kész a kapcsolat, a memóriába tesszük a csomagot
         if (peerConnection && peerConnection.remoteDescription && peerConnection.remoteDescription.type) { 
             peerConnection.addIceCandidate(new RTCIceCandidate(signal.candidate)).catch(e => console.log(e)); 
         } else {
