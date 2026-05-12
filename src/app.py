@@ -6,6 +6,7 @@ import time
 import re
 import urllib.request
 import urllib.parse
+import base64
 from botocore.config import Config
 
 s3_config = Config(signature_version='s3v4')
@@ -87,6 +88,7 @@ def lambda_handler(event, context):
                         }
                         if item.get('replyTo'): m['replyTo'] = {'sender': item['replyTo']['M']['sender']['S'], 'message': item['replyTo']['M']['message']['S']}
                         if item.get('linkPreview'): m['linkPreview'] = json.loads(item['linkPreview']['S'])
+                        if item.get('reactions'): m['reactions'] = json.loads(item['reactions']['S'])
                         history.append(m)
                     history.reverse()
                     if history: apigw_management.post_to_connection(ConnectionId=connection_id, Data=json.dumps({'type': 'history', 'messages': history}).encode('utf-8'))
@@ -144,26 +146,18 @@ def lambda_handler(event, context):
             if reply_to: payload['replyTo'] = reply_to
             if apigw_management: broadcast(apigw_management, payload, room)
 
-            # --- AI Kalandmester hívás ---
             if message.strip().startswith('/kaland'):
                 prompt = message.replace('/kaland', '').strip()
                 ai_message = ""
                 try:
                     bedrock = boto3.client('bedrock-runtime', region_name='eu-central-1')
                     model_arn = 'arn:aws:bedrock:eu-central-1:682356774927:inference-profile/eu.anthropic.claude-haiku-4-5-20251001-v1:0'
-                    
                     messages_payload = [{"role": "user", "content": [{"text": f"Te egy magyar nyelvű humoros, titokzatos Kalandmester (Dungeon Master) vagy. Egy játékos ezt lépi a kalandban: '{prompt}'. Reagálj rá izgalmasan, fantázia stílusban maximum 3 mondatban, és tegyél fel neki egy újabb kérdést vagy kihívást!"}]}]
-                    
-                    resp = bedrock.converse(
-                        modelId=model_arn,
-                        messages=messages_payload,
-                        inferenceConfig={"maxTokens": 400}
-                    )
+                    resp = bedrock.converse(modelId=model_arn, messages=messages_payload, inferenceConfig={"maxTokens": 400})
                     ai_message = resp['output']['message']['content'][0]['text']
-                    
                 except Exception as e:
                     print(f"BEDROCK HIBA: {str(e)}")
-                    ai_message = f"🧙‍♂️ Rendszerhiba... (A kód megállt! Van 30mp a lambda.tf timeoutban?) Részlet: {str(e)[:50]}"
+                    ai_message = f"🧙‍♂️ Rendszerhiba a Kalandmesternél... Hiba: {str(e)[:50]}"
                 
                 ai_msg_id = str(uuid.uuid4())
                 ai_timestamp = timestamp + 1
@@ -176,17 +170,58 @@ def lambda_handler(event, context):
                 dynamodb.put_item(TableName=MESSAGES_TABLE, Item=ai_item)
                 if apigw_management: broadcast(apigw_management, {'type': 'chat', 'msgId': ai_msg_id, 'sender': ai_sender, 'deviceId': 'AI_BOT', 'message': ai_message, 'timestamp': ai_timestamp}, room)
 
-        # --- JAVÍTVA: Visszatértünk a klasszikus rajz formátumhoz ---
+            elif message.strip().startswith('/kep'):
+                raw_prompt = message.replace('/kep', '').strip()
+                ai_message = ""
+                try:
+                    bedrock_translate = boto3.client('bedrock-runtime', region_name='eu-central-1')
+                    translate_arn = 'arn:aws:bedrock:eu-central-1:682356774927:inference-profile/eu.anthropic.claude-haiku-4-5-20251001-v1:0'
+                    translate_payload = [{"role": "user", "content": [{"text": f"Translate the following image generation prompt to English. Return ONLY the English translation, without any quotes or extra words: {raw_prompt}"}]}]
+                    trans_resp = bedrock_translate.converse(modelId=translate_arn, messages=translate_payload, inferenceConfig={"maxTokens": 100})
+                    english_prompt = trans_resp['output']['message']['content'][0]['text'].strip()
+                    
+                    bedrock_img = boto3.client('bedrock-runtime', region_name='us-west-2')
+                    req_body = json.dumps({
+                        "prompt": english_prompt,
+                        "mode": "text-to-image",
+                        "aspect_ratio": "1:1",
+                        "output_format": "jpeg"
+                    })
+                    res = bedrock_img.invoke_model(
+                        modelId='stability.stable-image-core-v1:1',
+                        body=req_body,
+                        accept='application/json',
+                        contentType='application/json'
+                    )
+                    
+                    res_body = json.loads(res['body'].read().decode('utf-8'))
+                    if 'images' in res_body: base64_img = res_body['images'][0]
+                    elif 'artifacts' in res_body: base64_img = res_body['artifacts'][0]['base64']
+                    else: raise ValueError("Nem található képadat.")
+                        
+                    img_bytes = base64.b64decode(base64_img)
+                    safe_name = f"aigenerated_{uuid.uuid4()}.jpg"
+                    s3_client.put_object(Bucket=IMAGE_BUCKET, Key=safe_name, Body=img_bytes, ContentType='image/jpeg')
+                    ai_message = f"https://s3.eu-central-1.amazonaws.com/{IMAGE_BUCKET}/{safe_name}"
+                    
+                except Exception as e:
+                    print(f"BEDROCK IMAGE HIBA: {str(e)}")
+                    ai_message = f"🎨 Hiba a képgenerálás során... Hiba: {str(e)[:50]}"
+                
+                ai_msg_id = str(uuid.uuid4())
+                ai_timestamp = timestamp + 1
+                ai_sender = "🎨 AI Művész|ai"
+                ai_item = {
+                    'room': {'S': room}, 'timestamp': {'N': str(ai_timestamp)}, 'msgId': {'S': ai_msg_id},
+                    'sender': {'S': ai_sender}, 'deviceId': {'S': 'AI_BOT'}, 'message': {'S': ai_message}, 
+                    'expiresAt': {'N': str(expires_at)}, 'isRead': {'BOOL': False}
+                }
+                dynamodb.put_item(TableName=MESSAGES_TABLE, Item=ai_item)
+                if apigw_management: broadcast(apigw_management, {'type': 'chat', 'msgId': ai_msg_id, 'sender': ai_sender, 'deviceId': 'AI_BOT', 'message': ai_message, 'timestamp': ai_timestamp}, room)
+
         elif action == 'draw':
             room = body.get('room', 'main')
-            payload = {
-                'type': 'draw', 
-                'sender': body.get('username'), 
-                'x': body.get('x'), 
-                'y': body.get('y'), 
-                'color': body.get('color'), 
-                'drawType': body.get('drawType')
-            }
+            payload = {'type': 'draw', 'sender': body.get('username'), 'x': body.get('x'), 'y': body.get('y'), 'color': body.get('color'), 'drawType': body.get('drawType')}
             if apigw_management: broadcast(apigw_management, payload, room)
 
         elif action == 'webrtcSignal':
@@ -214,7 +249,28 @@ def lambda_handler(event, context):
             if apigw_management: broadcast(apigw_management, {'type': 'typing', 'sender': body.get('username'), 'typing': body.get('typing')}, body.get('room', 'main'))
 
         elif action == 'sendReaction':
-            if apigw_management: broadcast(apigw_management, {'type': 'reaction', 'msgId': body.get('msgId'), 'emoji': body.get('emoji'), 'isAdd': body.get('isAdd')}, body.get('room', 'main'))
+            msg_id = body.get('msgId')
+            ts = body.get('timestamp')
+            emoji = body.get('emoji')
+            is_add = body.get('isAdd')
+            room = body.get('room', 'main')
+            username = body.get('username')
+            
+            if msg_id and ts and username:
+                try:
+                    item_resp = dynamodb.get_item(TableName=MESSAGES_TABLE, Key={'room': {'S': room}, 'timestamp': {'N': str(ts)}})
+                    item = item_resp.get('Item')
+                    if item:
+                        reactions_str = item.get('reactions', {}).get('S', '{}')
+                        reactions_data = json.loads(reactions_str)
+                        if emoji not in reactions_data: reactions_data[emoji] = []
+                        if is_add and username not in reactions_data[emoji]: reactions_data[emoji].append(username)
+                        elif not is_add and username in reactions_data[emoji]: reactions_data[emoji].remove(username)
+                        if not reactions_data[emoji]: del reactions_data[emoji]
+                        dynamodb.update_item(TableName=MESSAGES_TABLE, Key={'room': {'S': room}, 'timestamp': {'N': str(ts)}}, UpdateExpression="SET reactions = :r", ExpressionAttributeValues={':r': {'S': json.dumps(reactions_data)}})
+                except Exception as e: print("Reaction save error:", str(e))
+            
+            if apigw_management: broadcast(apigw_management, {'type': 'reaction', 'msgId': msg_id, 'emoji': emoji, 'isAdd': is_add, 'username': username}, room)
 
         elif action == 'getUploadUrl':
             try:

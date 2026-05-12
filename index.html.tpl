@@ -70,7 +70,7 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; height: var(--app
 .reaction-badge:hover { transform: scale(1.1); }
 .reaction-badge.reacted { background: rgba(255, 153, 0, 0.15); border-color: #ff9900; }
 
-#menu-overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; z-index: 8000; }
+#menu-overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; z-index: 8000; touch-action: none; }
 .reaction-menu { display: none; position: fixed; background: var(--container-bg); border: 1px solid var(--border-color); border-radius: 30px; padding: 8px 15px; box-shadow: 0 4px 25px rgba(0,0,0,0.4); z-index: 9000; gap: 15px; align-items: center; }
 .reaction-menu span { font-size: 26px; cursor: pointer; transition: transform 0.1s; display: inline-block; }
 .reaction-menu span:hover { transform: scale(1.3); }
@@ -81,7 +81,6 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; height: var(--app
 #game-menu div:last-child { border-bottom: none; }
 #game-menu div:hover { background: rgba(255,153,0,0.1); color: #ff9900; }
 
-/* JAVÍTOTT: Emoji Picker Popup a jobb oldalra! */
 #emoji-picker-container { display: none; position: absolute; bottom: 65px; right: 90px; z-index: 9000; box-shadow: 0 -4px 15px rgba(0,0,0,0.2); border-radius: 10px; overflow: hidden; background: var(--container-bg); }
 emoji-picker { width: 300px; height: 350px; --background: var(--container-bg); --border-color: var(--border-color); --category-font-color: var(--text-color); }
 @media (max-width: 400px) { emoji-picker { width: 100vw; height: 300px; } #emoji-picker-container { left: 0; right: 0; bottom: 55px; border-radius: 0; } }
@@ -116,7 +115,6 @@ audio { max-width: 220px; height: 40px; margin-top: 5px; outline: none; }
 
 #input-area { display: flex; align-items: center; padding: 10px; background: var(--input-bg); border-top: 1px solid var(--border-color); position: relative; flex-shrink: 0; box-sizing: border-box; padding-bottom: calc(15px + env(safe-area-inset-bottom, 0px)); }
 
-/* JAVÍTOTT: Belső Emoji gomb és Input mező formázás */
 .input-wrapper { flex: 1; display: flex; align-items: center; border: 1px solid var(--border-color); border-radius: 20px; background: var(--container-bg); margin-left: 5px; }
 #message-input { flex: 1; padding: 10px 10px 10px 15px; border: none; outline: none; background: transparent; color: var(--text-color); font-size: 16px; min-width: 0; }
 #emoji-btn { margin-right: 5px; padding: 2px 5px; font-size: 18px; opacity: 0.7; transition: 0.2s; }
@@ -154,7 +152,6 @@ audio { max-width: 220px; height: 40px; margin-top: 5px; outline: none; }
 .call-user-btn { margin-left: 5px; width: 22px; height: 22px; font-size: 10px; border: none; background: #ff9900; color: white; padding: 0; }
 .desktop-react-btn, .desktop-reply-btn { display: none !important; }
 
-/* Kisebb ikonok és gombok a mobil beviteli sávban */
 #input-area { padding: 8px 3px !important; padding-bottom: calc(8px + env(safe-area-inset-bottom, 0px)) !important; }
 .icon-btn { font-size: 17px; padding: 2px; margin: 0 1px; }
 .input-wrapper { margin-left: 2px; }
@@ -261,6 +258,7 @@ audio { max-width: 220px; height: 40px; margin-top: 5px; outline: none; }
 <div id="game-menu">
     <div onclick="openWhiteboard()">🎨 Rajztábla (Küldés)</div>
     <div onclick="startKaland()">🧙‍♂️ AI Kalandmester</div>
+    <div onclick="startKep()">🎨 AI Képgenerátor</div>
 </div>
 
 <input type="file" id="file-input" multiple style="display:none">
@@ -479,13 +477,12 @@ function connectToChat() {
         }
         else if (data.message && data.sender) { 
             const isMine = checkIfMine(data.sender, data.deviceId); 
-            
             if (isMine && data.tempId) {
                 const pendingWrap = document.getElementById('wrap-' + data.tempId);
                 if (pendingWrap) pendingWrap.remove();
             }
 
-            addMessage(data.message, false, data.sender, isMine, data.msgId, data.replyTo, data.linkPreview, 'sent'); 
+            addMessage(data.message, false, data.sender, isMine, data.msgId, data.replyTo, data.linkPreview, 'sent', data.timestamp); 
             
             if (!isMine) {
                 if (document.visibilityState === 'visible') {
@@ -502,7 +499,7 @@ function connectToChat() {
             data.messages.forEach(msg => { 
                 const isMine = checkIfMine(msg.sender, msg.deviceId); 
                 const status = msg.isRead ? 'read' : 'sent'; 
-                addMessage(msg.message, false, msg.sender, isMine, msg.msgId, msg.replyTo, msg.linkPreview, status); 
+                addMessage(msg.message, false, msg.sender, isMine, msg.msgId, msg.replyTo, msg.linkPreview, status, msg.timestamp, msg.reactions); 
             }); 
             scrollToBottom(); 
         }
@@ -551,9 +548,20 @@ micBtn.addEventListener('click', async () => {
 function initiateReply(sender, text) { 
     replyingTo = { sender: sender, message: text }; 
     const dispName = sender.split('|')[0];
-    const previewText = text.includes('.amazonaws.com/') ? "📸 [Fájl/Hang]" : text; 
+    let previewHTML = text; 
+    
+    if (text.includes('.amazonaws.com/')) {
+        const urlWithoutQuery = text.split('?')[0]; 
+        const ext = urlWithoutQuery.split('.').pop().toLowerCase();
+        if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'heic'].includes(ext)) {
+            previewHTML = '<img src="' + text + '" style="height:25px; width:auto; border-radius:4px; vertical-align:middle; margin-right:5px;"> <span style="vertical-align:middle;">📸 Kép</span>';
+        } else {
+            previewHTML = "📁 [Fájl/Hang]";
+        }
+    }
+    
     document.getElementById('reply-preview-sender').innerText = 'Válasz neki: ' + dispName; 
-    document.getElementById('reply-preview-text').innerText = previewText; 
+    document.getElementById('reply-preview-text').innerHTML = previewHTML; 
     document.getElementById('reply-preview').style.display = 'flex'; messageInput.focus(); closeReactMenu(); 
 }
 function initiateReplyFromMenu() { initiateReply(activeMsgSender, activeMsgText); }
@@ -619,18 +627,72 @@ function updateUserList(users) {
 }
 
 function scrollToBottom() { setTimeout(() => { if (messagesDiv) { messagesDiv.scrollTop = messagesDiv.scrollHeight + 1000; } }, 150); }
-function openReactMenu(clientX, clientY, msgId, sender, text) { activeMsgId = msgId; activeMsgSender = sender; activeMsgText = text; reactionMenu.style.display = 'flex'; menuOverlay.style.display = 'block'; let leftPos = clientX; let topPos = clientY - 60; if (leftPos > window.innerWidth - 220) leftPos = window.innerWidth - 220; if (leftPos < 10) leftPos = 10; if (topPos < 10) topPos = clientY + 30; reactionMenu.style.left = leftPos + 'px'; reactionMenu.style.top = topPos + 'px'; }
-function closeReactMenu() { reactionMenu.style.display = 'none'; menuOverlay.style.display = 'none'; }
-function sendEmojiReact(emoji) { if (activeMsgId && socket.readyState === 1) { const key = activeMsgId + ':' + emoji; const isAdding = !myReactions.has(key); if (isAdding) myReactions.add(key); else myReactions.delete(key); socket.send(JSON.stringify({ action: 'sendReaction', msgId: activeMsgId, emoji: emoji, isAdd: isAdding, room: currentRoom })); } closeReactMenu(); }
-function updateReactionUI(msgId, emoji, isAdd = true) { const cont = document.getElementById('reacts-' + msgId); if (!cont) return; let badge = cont.querySelector('[data-emoji="' + emoji + '"]'); let delta = isAdd ? 1 : -1; if (badge) { let count = parseInt(badge.getAttribute('data-count')) + delta; if (count <= 0) { badge.remove(); } else { badge.setAttribute('data-count', count); badge.innerText = emoji + ' ' + count; const key = msgId + ':' + emoji; if (myReactions.has(key)) badge.classList.add('reacted'); else badge.classList.remove('reacted'); } } else if (isAdd) { badge = document.createElement('span'); badge.className = 'reaction-badge'; badge.setAttribute('data-emoji', emoji); badge.setAttribute('data-count', '1'); badge.innerText = emoji + ' 1'; badge.onclick = () => { activeMsgId = msgId; sendEmojiReact(emoji); }; const key = msgId + ':' + emoji; if (myReactions.has(key)) badge.classList.add('reacted'); cont.appendChild(badge); } scrollToBottom(); }
 
-function addMessage(text, isSystem = false, sender = '', isMine = false, msgId = '', replyTo = null, linkPreview = null, status = 'sent') {
+function openReactMenu(clientX, clientY, msgId, sender, text) { 
+    activeMsgId = msgId; activeMsgSender = sender; activeMsgText = text; 
+    reactionMenu.style.display = 'flex'; menuOverlay.style.display = 'block'; 
+    
+    let menuWidth = 260; 
+    let leftPos = clientX - (menuWidth / 2); 
+    let topPos = clientY - 60; 
+    
+    if (leftPos < 10) leftPos = 10; 
+    if (leftPos + menuWidth > window.innerWidth) leftPos = window.innerWidth - menuWidth - 10; 
+    if (topPos < 10) topPos = clientY + 30; 
+    
+    reactionMenu.style.left = leftPos + 'px'; 
+    reactionMenu.style.top = topPos + 'px'; 
+}
+function closeReactMenu() { reactionMenu.style.display = 'none'; menuOverlay.style.display = 'none'; }
+
+function sendEmojiReact(emoji) { 
+    if (activeMsgId && socket.readyState === 1) { 
+        const key = activeMsgId + ':' + emoji; 
+        const isAdding = !myReactions.has(key); 
+        if (isAdding) myReactions.add(key); else myReactions.delete(key); 
+        
+        const msgElement = document.getElementById('wrap-' + activeMsgId);
+        const ts = msgElement ? msgElement.getAttribute('data-ts') : null;
+        
+        socket.send(JSON.stringify({ action: 'sendReaction', msgId: activeMsgId, timestamp: ts, emoji: emoji, isAdd: isAdding, room: currentRoom, username: myUsername })); 
+    } 
+    closeReactMenu(); 
+}
+
+function updateReactionUI(msgId, emoji, isAdd = true) { 
+    const cont = document.getElementById('reacts-' + msgId); 
+    if (!cont) return; 
+    let badge = cont.querySelector('[data-emoji="' + emoji + '"]'); 
+    let delta = isAdd ? 1 : -1; 
+    if (badge) { 
+        let count = parseInt(badge.getAttribute('data-count')) + delta; 
+        if (count <= 0) { badge.remove(); } else { 
+            badge.setAttribute('data-count', count); badge.innerText = emoji + ' ' + count; 
+            const key = msgId + ':' + emoji; 
+            if (myReactions.has(key)) badge.classList.add('reacted'); else badge.classList.remove('reacted'); 
+        } 
+    } else if (isAdd) { 
+        badge = document.createElement('span'); 
+        badge.className = 'reaction-badge'; 
+        badge.setAttribute('data-emoji', emoji); 
+        badge.setAttribute('data-count', '1'); 
+        badge.innerText = emoji + ' 1'; 
+        badge.onclick = () => { activeMsgId = msgId; sendEmojiReact(emoji); }; 
+        const key = msgId + ':' + emoji; 
+        if (myReactions.has(key)) badge.classList.add('reacted'); 
+        cont.appendChild(badge); 
+    } 
+    scrollToBottom(); 
+}
+
+function addMessage(text, isSystem = false, sender = '', isMine = false, msgId = '', replyTo = null, linkPreview = null, status = 'sent', timestamp = 0, initialReactions = null) {
     let dispName = sender ? sender.split('|')[0] : '';
     let seed = sender ? (sender.split('|')[1] || sender) : (myUsername.split('|')[1] || myUsername);
 
     const row = document.createElement('div');
     row.className = 'message-row ' + (isMine ? 'mine' : 'others');
     row.id = 'wrap-' + msgId; 
+    row.setAttribute('data-ts', timestamp);
 
     if (!isSystem) {
         const avatar = document.createElement('img');
@@ -648,8 +710,17 @@ function addMessage(text, isSystem = false, sender = '', isMine = false, msgId =
     let contentHTML = ''; if (sender && !isMine) contentHTML += '<span class="sender-name">' + dispName + '</span>';
     
     if (replyTo) { 
-        const previewText = replyTo.message.includes('.amazonaws.com/') ? "📸 [Fájl/Hang]" : replyTo.message; 
-        contentHTML += '<div class="quoted-msg"><strong>' + replyTo.sender.split('|')[0] + '</strong><br><span>' + previewText + '</span></div>'; 
+        let previewContent = replyTo.message;
+        if (replyTo.message.includes('.amazonaws.com/')) {
+            const urlWithoutQuery = replyTo.message.split('?')[0];
+            const ext = urlWithoutQuery.split('.').pop().toLowerCase();
+            if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'heic'].includes(ext)) {
+                previewContent = '<img src="' + replyTo.message + '" style="height:35px; width:auto; border-radius:4px; margin-top:4px; display:block;">';
+            } else {
+                previewContent = "📁 [Fájl/Hang]";
+            }
+        }
+        contentHTML += '<div class="quoted-msg"><strong>' + replyTo.sender.split('|')[0] + '</strong><br><span>' + previewContent + '</span></div>'; 
     }
     
     if (text.includes('.amazonaws.com/')) {
@@ -682,7 +753,32 @@ function addMessage(text, isSystem = false, sender = '', isMine = false, msgId =
     }
     
     wrapper.appendChild(msgDiv);
-    if (!isSystem && msgId && status !== 'pending') { const rCont = document.createElement('div'); rCont.className = 'reaction-container'; rCont.id = 'reacts-' + msgId; wrapper.appendChild(rCont); }
+    
+    if (!isSystem && msgId && status !== 'pending') { 
+        const rCont = document.createElement('div'); 
+        rCont.className = 'reaction-container'; 
+        rCont.id = 'reacts-' + msgId; 
+        
+        if (initialReactions) {
+            for (const [em, users] of Object.entries(initialReactions)) {
+                if (users.length > 0) {
+                    const badge = document.createElement('span'); 
+                    badge.className = 'reaction-badge'; 
+                    if (users.includes(myUsername)) {
+                        badge.classList.add('reacted');
+                        myReactions.add(msgId + ':' + em);
+                    }
+                    badge.setAttribute('data-emoji', em); 
+                    badge.setAttribute('data-count', users.length); 
+                    badge.innerText = em + ' ' + users.length; 
+                    badge.onclick = () => { activeMsgId = msgId; sendEmojiReact(em); };
+                    rCont.appendChild(badge);
+                }
+            }
+        }
+        wrapper.appendChild(rCont); 
+    }
+    
     row.appendChild(wrapper); messagesDiv.appendChild(row); scrollToBottom();
 }
 
@@ -690,7 +786,7 @@ function sendMessage() {
     const text = messageInput.value.trim();
     if (text) {
         const tempId = 'temp-' + Date.now();
-        addMessage(text, false, myUsername, true, tempId, replyingTo, null, 'pending');
+        addMessage(text, false, myUsername, true, tempId, replyingTo, null, 'pending', Date.now());
         if (socket.readyState === WebSocket.OPEN) {
             const payload = { action: 'sendMessage', message: text, username: myUsername, deviceId: myDeviceId, room: currentRoom, tempId: tempId };
             if (replyingTo) { payload.replyTo = { sender: replyingTo.sender, message: replyingTo.message }; }
@@ -845,6 +941,12 @@ window.ontouchend = () => { isDrawing = false; ctx.beginPath(); };
 function startKaland() {
     document.getElementById('game-menu').style.display = 'none';
     messageInput.value = '/kaland ';
+    messageInput.focus();
+}
+
+function startKep() {
+    document.getElementById('game-menu').style.display = 'none';
+    messageInput.value = '/kep ';
     messageInput.focus();
 }
 

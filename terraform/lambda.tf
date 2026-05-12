@@ -37,6 +37,14 @@ resource "aws_iam_role_policy" "lambda_policy" {
       },
       {
           Effect = "Allow"
+          Action = [
+            "transcribe:StartTranscriptionJob",
+            "transcribe:GetTranscriptionJob"
+          ]
+          Resource = "*"
+        },
+      {
+          Effect = "Allow"
           Action = ["bedrock:InvokeModel"]
           Resource = "*"
         },
