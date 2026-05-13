@@ -131,6 +131,15 @@ if (secretModeBtn) {
             const ind = document.getElementById('secret-ind');
             if (ind) ind.remove();
         }
+        if (state.socket && state.socket.readyState === WebSocket.OPEN) {
+            dom.messagesDiv.innerHTML = ''; // Kiürítjük a chatet a frissítés előtt
+            state.socket.send(JSON.stringify({ 
+                action: 'join', 
+                username: state.myUsername, 
+                room: state.currentRoom, 
+                password: state.currentRoomPassword 
+            }));
+        }
     });
 }
 

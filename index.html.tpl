@@ -81,7 +81,7 @@
                     <button id="avatar-btn" class="header-btn" style="border-color: #9c27b0; color: #9c27b0;">🎲 Avatar</button>
                     <button id="room-btn" class="header-btn" style="border-color: #4CAF50; color: #4CAF50;">+ Szobaváltás</button>
                     <button id="change-name-btn" class="header-btn" style="border-color: var(--header-text); color: var(--header-text);">Névváltás</button>
-                    <button id="theme-toggle" class="header-btn">Sötét mód</button>
+                    <button id="theme-toggle" class="header-btn" style="position: relative; z-index: 101; pointer-events: auto;">Sötét mód</button>
                     <button id="secret-mode-btn" class="header-btn" style="border-color: #ff3b30; color: #ff3b30;">🕵️ Titkos Mód</button>
 
                 </div>

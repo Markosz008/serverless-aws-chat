@@ -90,10 +90,12 @@ export async function encryptMessage(text) {
 
 // 4. Lépés: Üzenet visszafejtése
 export async function decryptMessage(encryptedString) {
-    if (!encryptedString.startsWith("E2E_MSG::")) return encryptedString; // Ha sima üzenet, visszaadja
+    if (!encryptedString.startsWith("E2E_MSG::")) return encryptedString; 
     
-    // --- ÚJ: Ha nincs kulcsunk, egy esztétikus lakatot mutatunk a ronda kód helyett! ---
-    if (!cryptoKey) return "🔒 [Titkosított üzenet. Lépj be a Titkos Módba az olvasásához!]"; 
+    // Ha az E2E mód ki van kapcsolva a felhasználónál, azonnal lakatot mutatunk
+    if (!e2eEnabled || !cryptoKey) {
+        return "🔒 [Titkosított üzenet. Lépj be a Titkos Módba az olvasásához!]"; 
+    } 
     
     try {
         const payloadStr = encryptedString.replace("E2E_MSG::", "");
