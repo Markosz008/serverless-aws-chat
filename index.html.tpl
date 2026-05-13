@@ -9,7 +9,6 @@
     <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/134/134808.png">
     <script type="module" src="https://cdn.jsdelivr.net/npm/emoji-picker-element@^1/index.js"></script>
     
-    <!-- Itt hívjuk be az új, kiszervezett CSS-t! -->
     <link rel="stylesheet" href="css/style.css">
     <link rel="stylesheet" href="css/secret.css">
 </head>
@@ -122,12 +121,33 @@
         </div>
     </div>
 
-    <!-- Itt injektáljuk be a WebSocket URL-t a Terraformmal -->
     <script>
         window.WSS_URL = '${websocket_url}';
+
+        // --- MOBIL BILLENTYŰZET JAVÍTÁSOK ---
+        // 1. iOS fekete képernyő (scroll) hiba megakadályozása viewport frissítéskor
+        if (window.visualViewport) {
+            window.visualViewport.addEventListener('resize', () => {
+                window.scrollTo(0, 0);
+                document.body.scrollTop = 0;
+            });
+        }
+
+        // 2. Felesleges elemek (oldalsáv) elrejtése gépelés közben, hogy ne feszítse szét az Androidot
+        document.addEventListener('DOMContentLoaded', () => {
+            const msgInput = document.getElementById('message-input');
+            if (msgInput) {
+                msgInput.addEventListener('focus', () => {
+                    document.body.classList.add('keyboard-open');
+                    window.scrollTo(0,0);
+                });
+                msgInput.addEventListener('blur', () => {
+                    setTimeout(() => document.body.classList.remove('keyboard-open'), 100);
+                });
+            }
+        });
     </script>
     
-    <!-- És itt hívjuk be az új, kiszervezett JavaScriptet! -->
     <script type="module" src="js/app.js"></script>
 </body>
 </html>
