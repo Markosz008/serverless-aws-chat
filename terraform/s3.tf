@@ -48,6 +48,29 @@ resource "aws_s3_object" "index_html" {
   }))
 }
 
+# --- ÚJ FÁJLOK: CSS és JS feltöltése a bontáshoz ---
+
+resource "aws_s3_object" "frontend_css_files" {
+  for_each = fileset("${path.module}/../frontend/css", "**/*.css")
+
+  bucket       = aws_s3_bucket.frontend_bucket.id
+  key          = "css/${each.value}"
+  source       = "${path.module}/../frontend/css/${each.value}"
+  content_type = "text/css"
+  etag         = filemd5("${path.module}/../frontend/css/${each.value}")
+}
+
+# --- DINAMIKUS CIKLUS: Az összes JS fájl feltöltése a frontend/js mappából ---
+resource "aws_s3_object" "frontend_js_files" {
+  for_each = fileset("${path.module}/../frontend/js", "**/*.js")
+
+  bucket       = aws_s3_bucket.frontend_bucket.id
+  key          = "js/${each.value}"
+  source       = "${path.module}/../frontend/js/${each.value}"
+  content_type = "application/javascript"
+  etag         = filemd5("${path.module}/../frontend/js/${each.value}")
+}
+
 # --- IMAGE STORAGE BUCKET (A fotóknak) ---
 
 resource "aws_s3_bucket" "chat_images" {
@@ -93,10 +116,9 @@ resource "aws_s3_bucket_cors_configuration" "chat_cors" {
   bucket = aws_s3_bucket.chat_images.id
   cors_rule {
     allowed_headers = ["*"]
-    # Az S3-nál a PUT/POST engedélyezése automatikusan kezeli a preflight OPTIONS kérést.
     allowed_methods = ["GET", "PUT", "POST", "HEAD"]
     allowed_origins = ["*"]
-    expose_headers  = ["ETag"]
+    expose_headers  = ["ETag", "Accept-Ranges", "Content-Range", "Content-Encoding", "Content-Length"]
     max_age_seconds = 3600
   }
 }
@@ -139,7 +161,6 @@ resource "aws_s3_object" "manifest_json" {
     theme_color      = "#232f3e"
     icons = [
       {
-        # Ingyenes placeholder ikon a webről
         src   = "https://cdn-icons-png.flaticon.com/512/134/134808.png"
         sizes = "512x512"
         type  = "image/png"
@@ -159,19 +180,27 @@ resource "aws_s3_object" "service_worker" {
       self.skipWaiting();
     });
     self.addEventListener('fetch', (e) => {
-      // Egyelőre mindent átengedünk a hálózaton (nem cache-elünk agresszíven)
+      // Egyelőre mindent átengedünk a hálózaton
     });
   EOT
 }
 
 resource "null_resource" "cloudfront_invalidation" {
   triggers = {
-    # Ez figyeli, hogy változott-e az index.html kódja
-    html_hash = filemd5("${path.module}/../index.html.tpl")
+    # Új HTML-t és a CSS-t
+    html_hash  = filemd5("${path.module}/../index.html.tpl")
+    css_hash   = filemd5("${path.module}/../frontend/css/style.css")
+    
+    #ÚJ, szétdarabolt JS modulokat
+    js_state   = filemd5("${path.module}/../frontend/js/state.js")
+    js_ui      = filemd5("${path.module}/../frontend/js/ui.js")
+    js_network = filemd5("${path.module}/../frontend/js/network.js")
+    js_media   = filemd5("${path.module}/../frontend/js/media.js")
+    js_app     = filemd5("${path.module}/../frontend/js/app.js")
   }
 
   provisioner "local-exec" {
-    # FONTOS: Cseréld ki a DISTRIBUTION_ID_IDE_JON részt a saját CloudFront ID-dra!
+  
     command = "aws cloudfront create-invalidation --distribution-id ESV32IXWM4EHZ --paths '/*'"
   }
 }

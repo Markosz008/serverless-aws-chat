@@ -77,7 +77,15 @@ def lambda_handler(event, context):
                 try:
                     res = dynamodb.query(TableName=MESSAGES_TABLE, KeyConditionExpression="room = :r", ExpressionAttributeValues={":r": {"S": target_room}}, ScanIndexForward=False, Limit=100)
                     history = []
+                    
+                    current_time = int(time.time())
+                    
                     for item in res.get('Items', []):
+                        # --- ÚJ: Azonnali TTL szűrés ---
+                        exp = item.get('expiresAt', {}).get('N')
+                        if exp and int(exp) < current_time:
+                            continue
+                            
                         m = {
                             'msgId': item.get('msgId', {}).get('S'),
                             'sender': item.get('sender', {}).get('S'),
@@ -86,6 +94,7 @@ def lambda_handler(event, context):
                             'timestamp': int(item.get('timestamp', {}).get('N', 0)),
                             'isRead': item.get('isRead', {}).get('BOOL', False)
                         }
+                        if item.get('audioUrl'): m['audioUrl'] = item['audioUrl']['S']
                         if item.get('replyTo'): m['replyTo'] = {'sender': item['replyTo']['M']['sender']['S'], 'message': item['replyTo']['M']['message']['S']}
                         if item.get('linkPreview'): m['linkPreview'] = json.loads(item['linkPreview']['S'])
                         if item.get('reactions'): m['reactions'] = json.loads(item['reactions']['S'])
@@ -101,9 +110,18 @@ def lambda_handler(event, context):
             device_id = body.get('deviceId', 'unknown')
             reply_to = body.get('replyTo') 
             room = body.get('room', 'main') 
-            temp_id = body.get('tempId') 
+            temp_id = body.get('tempId')
+            
+            # --- ÚJ: Explicit Secret Mode Flag fogadása a frontedről ---
+            is_secret = body.get('isSecretMode', False)
+            
             timestamp = int(time.time() * 1000)
-            expires_at = int(time.time()) + (30 * 24 * 60 * 60)
+            
+            # Ha a kliens azt mondta, hogy ez titkos, akkor 5 perc, egyébként 30 nap
+            if is_secret:
+                expires_at = int(time.time()) + (5 * 60)
+            else:
+                expires_at = int(time.time()) + (30 * 24 * 60 * 60)
 
             link_preview = None
             urls = re.findall(r'(https?://[^\s]+)', message)
@@ -147,30 +165,104 @@ def lambda_handler(event, context):
             if apigw_management: broadcast(apigw_management, payload, room)
 
             if message.strip().startswith('/kaland'):
+                is_secret = body.get('isSecretMode', False)
+                if is_secret:
+                    if apigw_management: 
+                        apigw_management.post_to_connection(
+                            ConnectionId=connection_id, 
+                            Data=json.dumps({'type': 'error', 'message': '🔒 A Kalandmester nincs jelen a Titkos módban!'}).encode('utf-8')
+                        )
+                    return {'statusCode': 200}
                 prompt = message.replace('/kaland', '').strip()
                 ai_message = ""
+                audio_url = None # ÚJ: Változó az S3 linknek
+                
                 try:
+                    # 1. SZÖVEG GENERÁLÁS BEDROCKKAL (Magyarul a UI-nak)
                     bedrock = boto3.client('bedrock-runtime', region_name='eu-central-1')
                     model_arn = 'arn:aws:bedrock:eu-central-1:682356774927:inference-profile/eu.anthropic.claude-haiku-4-5-20251001-v1:0'
                     messages_payload = [{"role": "user", "content": [{"text": f"Te egy magyar nyelvű humoros, titokzatos Kalandmester (Dungeon Master) vagy. Egy játékos ezt lépi a kalandban: '{prompt}'. Reagálj rá izgalmasan, fantázia stílusban maximum 3 mondatban, és tegyél fel neki egy újabb kérdést vagy kihívást!"}]}]
                     resp = bedrock.converse(modelId=model_arn, messages=messages_payload, inferenceConfig={"maxTokens": 400})
                     ai_message = resp['output']['message']['content'][0]['text']
+                    
+                    # 1.5. VILLÁMGYORS FORDÍTÁS (Szigorú Emoji és leírás tiltás)
+                    translate_payload = [{"role": "user", "content": [{"text": f"Translate this Hungarian fantasy text to epic British English. CRITICAL INSTRUCTION: Ignore all emojis completely! Do NOT write the word 'emoji'. Do NOT describe the emojis. Just translate the spoken words. Text to translate: {ai_message}"}]}]
+                    trans_resp = bedrock.converse(modelId=model_arn, messages=translate_payload, inferenceConfig={"maxTokens": 400})
+                    english_audio_text = trans_resp['output']['message']['content'][0]['text'].strip()
+                    
+                    # BIZTONSÁGI TISZTÍTÁS: Kivágjuk a Claude által esetleg beletett [dragon emoji] szerű szövegeket
+                    english_audio_text = re.sub(r'\[.*?\]', '', english_audio_text)
+                    english_audio_text = re.sub(r'\(.*?\)', '', english_audio_text)
+                    english_audio_text = english_audio_text.replace('emoji', '').replace('Emoji', '')
+                    
+                    # 2. HANG GENERÁLÁS POLLY-VAL (BRIT ANGOL, NEURAL, NINCS TORZÍTÁS)
+                    polly = boto3.client('polly', region_name='eu-central-1')
+                    
+                    safe_text = english_audio_text.replace('&', 'and').replace('<', '').replace('>', '')
+                    
+                    # Teljesen tiszta speak tag - hagyjuk a Neural motort dolgozni!
+                    ssml_text = f'<speak>{safe_text}</speak>'
+                    
+                    polly_res = polly.synthesize_speech(
+                        Text=ssml_text,
+                        OutputFormat='mp3',
+                        TextType='ssml',
+                        VoiceId='Arthur', # <--- BRIT FANTASY NARRÁTOR
+                        Engine='neural'
+                    )
+                    
+                    # 3. HANG MENTÉSE S3-BA
+                    audio_key = f"kaland_audio_{uuid.uuid4()}.mp3"
+                    s3_client.put_object(
+                        Bucket=IMAGE_BUCKET, 
+                        Key=audio_key, 
+                        Body=polly_res['AudioStream'].read(), 
+                        ContentType='audio/mpeg'
+                    )
+                    
+                    audio_url = f"https://s3.eu-central-1.amazonaws.com/{IMAGE_BUCKET}/{audio_key}"
+
                 except Exception as e:
-                    print(f"BEDROCK HIBA: {str(e)}")
+                    print(f"BEDROCK/POLLY HIBA: {str(e)}")
                     ai_message = f"🧙‍♂️ Rendszerhiba a Kalandmesternél... Hiba: {str(e)[:50]}"
                 
+                # 4. MENTÉS A DYNAMODB-BE
                 ai_msg_id = str(uuid.uuid4())
                 ai_timestamp = timestamp + 1
                 ai_sender = "🧙‍♂️ Kalandmester|ai"
+                
                 ai_item = {
                     'room': {'S': room}, 'timestamp': {'N': str(ai_timestamp)}, 'msgId': {'S': ai_msg_id},
                     'sender': {'S': ai_sender}, 'deviceId': {'S': 'AI_BOT'}, 'message': {'S': ai_message}, 
                     'expiresAt': {'N': str(expires_at)}, 'isRead': {'BOOL': False}
                 }
+                
+                # Ha van hang, azt is beletesszük az adatbázisba
+                if audio_url:
+                    ai_item['audioUrl'] = {'S': audio_url}
+                    
                 dynamodb.put_item(TableName=MESSAGES_TABLE, Item=ai_item)
-                if apigw_management: broadcast(apigw_management, {'type': 'chat', 'msgId': ai_msg_id, 'sender': ai_sender, 'deviceId': 'AI_BOT', 'message': ai_message, 'timestamp': ai_timestamp}, room)
+                
+                # 5. KIKÜLDÉS A KLIENSEKNEK (WEBSOCKET)
+                broadcast_payload = {
+                    'type': 'chat', 'msgId': ai_msg_id, 'sender': ai_sender, 
+                    'deviceId': 'AI_BOT', 'message': ai_message, 'timestamp': ai_timestamp
+                }
+                if audio_url:
+                    broadcast_payload['audioUrl'] = audio_url
+                    
+                if apigw_management: 
+                    broadcast(apigw_management, broadcast_payload, room)
 
             elif message.strip().startswith('/kep'):
+                is_secret = body.get('isSecretMode', False)
+                if is_secret:
+                    if apigw_management: 
+                        apigw_management.post_to_connection(
+                            ConnectionId=connection_id, 
+                            Data=json.dumps({'type': 'error', 'message': '🔒 A Kalandmester nincs jelen a Titkos módban!'}).encode('utf-8')
+                        )
+                    return {'statusCode': 200}
                 raw_prompt = message.replace('/kep', '').strip()
                 ai_message = ""
                 try:

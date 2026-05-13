@@ -1,9 +1,9 @@
 # 1. Az API Gateway (WebSocket típus)
 resource "aws_apigatewayv2_api" "websocket_api" {
-  name                       = "serverless-chat-api"
-  protocol_type              = "WEBSOCKET"
+  name          = "serverless-chat-api"
+  protocol_type = "WEBSOCKET"
   # JSON-ben az 'action' mező fogja eldönteni a route-ot
-  route_selection_expression = "$request.body.action" 
+  route_selection_expression = "$request.body.action"
 }
 
 # 2. Integráció: Összekötjük az API Gateway-t a Lambdával

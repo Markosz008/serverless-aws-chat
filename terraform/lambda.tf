@@ -15,8 +15,8 @@ resource "aws_iam_role" "lambda_exec" {
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
-      Action = "sts:AssumeRole"
-      Effect = "Allow"
+      Action    = "sts:AssumeRole"
+      Effect    = "Allow"
       Principal = { Service = "lambda.amazonaws.com" }
     }]
   })
@@ -31,31 +31,36 @@ resource "aws_iam_role_policy" "lambda_policy" {
     Version = "2012-10-17"
     Statement = [
       {
-        Effect = "Allow"
-        Action = ["logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents"]
+        Effect   = "Allow"
+        Action   = ["logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents"]
         Resource = "arn:aws:logs:*:*:*"
       },
       {
-          Effect = "Allow"
-          Action = [
-            "transcribe:StartTranscriptionJob",
-            "transcribe:GetTranscriptionJob"
-          ]
-          Resource = "*"
-        },
+        Effect = "Allow"
+        Action = [
+          "transcribe:StartTranscriptionJob",
+          "transcribe:GetTranscriptionJob"
+        ]
+        Resource = "*"
+      },
       {
-          Effect = "Allow"
-          Action = ["bedrock:InvokeModel"]
-          Resource = "*"
-        },
+        Effect   = "Allow"
+        Action   = ["bedrock:InvokeModel"]
+        Resource = "*"
+      },
+      {
+        Effect   = "Allow"
+        Action   = ["polly:SynthesizeSpeech"]
+        Resource = "*"
+      },
       {
         # DynamoDB: Most már mind a HÁROM táblát éri
         Effect = "Allow"
         Action = [
-          "dynamodb:PutItem", 
-          "dynamodb:GetItem", 
-          "dynamodb:DeleteItem", 
-          "dynamodb:Scan", 
+          "dynamodb:PutItem",
+          "dynamodb:GetItem",
+          "dynamodb:DeleteItem",
+          "dynamodb:Scan",
           "dynamodb:UpdateItem",
           "dynamodb:Query"
         ]
@@ -66,13 +71,13 @@ resource "aws_iam_role_policy" "lambda_policy" {
         ]
       },
       {
-        Effect = "Allow"
-        Action = ["execute-api:ManageConnections"]
-        Resource = "arn:aws:execute-api:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:*/*"
+        Effect   = "Allow"
+        Action   = ["execute-api:ManageConnections"]
+        Resource = "arn:aws:execute-api:${data.aws_region.current.region}:${data.aws_caller_identity.current.account_id}:*/*"
       },
       {
-        Effect = "Allow",
-        Action = ["s3:PutObject", "s3:PutObjectAcl", "s3:GetObject", "s3:ListBucket"],
+        Effect   = "Allow",
+        Action   = ["s3:PutObject", "s3:PutObjectAcl", "s3:GetObject", "s3:ListBucket"],
         Resource = ["${aws_s3_bucket.chat_images.arn}", "${aws_s3_bucket.chat_images.arn}/*"]
       }
     ]
