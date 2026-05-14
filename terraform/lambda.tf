@@ -66,7 +66,9 @@ resource "aws_iam_role_policy" "lambda_policy" {
         Resource = [
           aws_dynamodb_table.websocket_connections.arn,
           aws_dynamodb_table.messages_table.arn,
-          aws_dynamodb_table.rooms_table.arn
+          aws_dynamodb_table.rooms_table.arn,
+          # ÚJ: Push subscriptions tábla jogosultság
+          aws_dynamodb_table.push_subscriptions.arn
         ]
       },
       {
@@ -96,18 +98,25 @@ resource "aws_lambda_function" "websocket_handler" {
   role             = aws_iam_role.lambda_exec.arn
   handler          = "app.lambda_handler"
   source_code_hash = data.archive_file.lambda_zip.output_base64sha256
-  runtime          = "python3.9"
+  runtime          = "python3.12"
 
   timeout = 30
 
+  # ÚJ: Csatoljuk a pywebpush Layert a Lambdához
+  layers = [aws_lambda_layer_version.webpush_layer.arn]
+
   environment {
     variables = {
-      CONNECTIONS_TABLE = aws_dynamodb_table.websocket_connections.name
-      MESSAGES_TABLE    = aws_dynamodb_table.messages_table.name
-      ROOMS_TABLE       = aws_dynamodb_table.rooms_table.name
-      IMAGE_BUCKET      = aws_s3_bucket.chat_images.id
-      # ÚJ: Avatar bucket neve a Lambda számára
-      AVATAR_BUCKET     = aws_s3_bucket.avatar_bucket.id
+      CONNECTIONS_TABLE   = aws_dynamodb_table.websocket_connections.name
+      MESSAGES_TABLE      = aws_dynamodb_table.messages_table.name
+      ROOMS_TABLE         = aws_dynamodb_table.rooms_table.name
+      IMAGE_BUCKET        = aws_s3_bucket.chat_images.id
+      AVATAR_BUCKET       = aws_s3_bucket.avatar_bucket.id
+      
+      # ÚJ: Változók a Web Push értesítésekhez
+      SUBSCRIPTIONS_TABLE = aws_dynamodb_table.push_subscriptions.name
+      VAPID_PRIVATE_KEY   = "ErIoQxdOQZKWcJo-hNaNh39BbqS4x3nK022EpBSjPXc"
+      VAPID_CONTACT_EMAIL = "mailto:admin@sajat-domained.hu" # Ez kötelező a push szerverek felé
     }
   }
 }

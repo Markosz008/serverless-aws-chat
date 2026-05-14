@@ -147,42 +147,20 @@ output "image_bucket_name" {
   value = aws_s3_bucket.chat_images.id
 }
 
-# --- ÚJ: PWA Manifest fájl az Appá alakításhoz ---
 resource "aws_s3_object" "manifest_json" {
   bucket       = aws_s3_bucket.frontend_bucket.id
   key          = "manifest.json"
+  source       = "${path.module}/../frontend/manifest.json"
   content_type = "application/json"
-  content      = jsonencode({
-    name             = "AWS Chat"
-    short_name       = "Chat"
-    start_url        = "/"
-    display          = "standalone"
-    background_color = "#232f3e"
-    theme_color      = "#232f3e"
-    icons = [
-      {
-        src   = "https://cdn-icons-png.flaticon.com/512/134/134808.png"
-        sizes = "512x512"
-        type  = "image/png"
-      }
-    ]
-  })
+  etag         = filemd5("${path.module}/../frontend/manifest.json")
 }
 
-# --- ÚJ: Service Worker a PWA működéséhez ---
 resource "aws_s3_object" "service_worker" {
   bucket       = aws_s3_bucket.frontend_bucket.id
   key          = "sw.js"
+  source       = "${path.module}/../frontend/sw.js"
   content_type = "application/javascript"
-  content      = <<-EOT
-    self.addEventListener('install', (e) => {
-      console.log('[ServiceWorker] Telepítve a háttérben');
-      self.skipWaiting();
-    });
-    self.addEventListener('fetch', (e) => {
-      // Egyelőre mindent átengedünk a hálózaton
-    });
-  EOT
+  etag         = filemd5("${path.module}/../frontend/sw.js")
 }
 
 resource "null_resource" "cloudfront_invalidation" {

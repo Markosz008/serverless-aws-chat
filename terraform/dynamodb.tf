@@ -40,7 +40,16 @@ resource "aws_dynamodb_table" "messages_table" {
     enabled        = true
   }
 }
+resource "aws_dynamodb_table" "push_subscriptions" {
+  name         = "chat-push-subscriptions"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "username" # A user neve lesz a kulcs (pl. Márk|12345)
 
+  attribute {
+    name = "username"
+    type = "S"
+  }
+}
 resource "aws_dynamodb_table" "rooms_table" {
   name         = "chat-rooms"
   billing_mode = "PAY_PER_REQUEST"
@@ -49,7 +58,7 @@ resource "aws_dynamodb_table" "rooms_table" {
   attribute {
     name = "roomName"
     type = "S"
-  }
+  }  
 
   tags = {
     Name = "Chat-Rooms-Passwords"
