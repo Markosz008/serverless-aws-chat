@@ -69,6 +69,9 @@ export function connectToChat() {
         else if (data.type === 'reaction') {
             updateReactionUI(data.msgId, data.emoji, data.isAdd);
         }
+        else if (data.type === 'roomInvite') {
+        if (window.showRoomInvite) window.showRoomInvite(data.sender, data.room);
+        }
         else if (data.type === 'typing') {
             if (data.sender !== state.myUsername) {
                 dom.typingDiv.innerText = data.sender.split('|')[0] + " éppen gépel...";

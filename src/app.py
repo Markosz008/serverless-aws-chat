@@ -347,7 +347,7 @@ def lambda_handler(event, context):
             is_add = body.get('isAdd')
             room = body.get('room', 'main')
             username = body.get('username')
-            
+
             if msg_id and ts and username:
                 try:
                     item_resp = dynamodb.get_item(TableName=MESSAGES_TABLE, Key={'room': {'S': room}, 'timestamp': {'N': str(ts)}})
@@ -355,14 +355,45 @@ def lambda_handler(event, context):
                     if item:
                         reactions_str = item.get('reactions', {}).get('S', '{}')
                         reactions_data = json.loads(reactions_str)
-                        if emoji not in reactions_data: reactions_data[emoji] = []
-                        if is_add and username not in reactions_data[emoji]: reactions_data[emoji].append(username)
-                        elif not is_add and username in reactions_data[emoji]: reactions_data[emoji].remove(username)
-                        if not reactions_data[emoji]: del reactions_data[emoji]
-                        dynamodb.update_item(TableName=MESSAGES_TABLE, Key={'room': {'S': room}, 'timestamp': {'N': str(ts)}}, UpdateExpression="SET reactions = :r", ExpressionAttributeValues={':r': {'S': json.dumps(reactions_data)}})
-                except Exception as e: print("Reaction save error:", str(e))
-            
-            if apigw_management: broadcast(apigw_management, {'type': 'reaction', 'msgId': msg_id, 'emoji': emoji, 'isAdd': is_add, 'username': username}, room)
+                        if emoji not in reactions_data:
+                            reactions_data[emoji] = []
+                        if is_add and username not in reactions_data[emoji]:
+                            reactions_data[emoji].append(username)
+                        elif not is_add and username in reactions_data[emoji]:
+                            reactions_data[emoji].remove(username)
+                        if not reactions_data[emoji]:
+                            del reactions_data[emoji]
+                        dynamodb.update_item(
+                            TableName=MESSAGES_TABLE,
+                            Key={'room': {'S': room}, 'timestamp': {'N': str(ts)}},
+                            UpdateExpression="SET reactions = :r",
+                            ExpressionAttributeValues={':r': {'S': json.dumps(reactions_data)}}
+                        )
+                except Exception as e:
+                    print("Reaction save error:", str(e))
+
+            if apigw_management:
+                broadcast(apigw_management, {'type': 'reaction', 'msgId': msg_id, 'emoji': emoji, 'isAdd': is_add, 'username': username}, room)
+
+        elif action == 'roomInvite':
+            target_user = body.get('targetUser')
+            sender = body.get('username')
+            room = body.get('room', 'main')
+            if apigw_management:
+                conns = dynamodb.scan(TableName=CONNECTIONS_TABLE).get('Items', [])
+                for c in conns:
+                    if c.get('username', {}).get('S') == target_user:
+                        try:
+                            apigw_management.post_to_connection(
+                                ConnectionId=c['connectionId']['S'],
+                                Data=json.dumps({
+                                    'type': 'roomInvite',
+                                    'sender': sender,
+                                    'room': room
+                                }).encode('utf-8')
+                            )
+                        except:
+                            pass
 
         elif action == 'getUploadUrl':
             try:

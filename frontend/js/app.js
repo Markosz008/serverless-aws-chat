@@ -29,6 +29,7 @@ dom.joinBtn.addEventListener('click', () => {
     localStorage.setItem('chatNickname', state.myUsername); 
     dom.loginScreen.style.display = 'none'; 
     connectToChat();
+    setTimeout(() => { if (window.updateProfileDropdown) window.updateProfileDropdown(); }, 300);
 });
 
 // --- Segédfüggvények ---
@@ -66,9 +67,18 @@ window.updateUserList = function(users) {
             callBtn.className = 'call-user-btn'; callBtn.innerText = '📞';
             callBtn.onclick = () => window.startCall(user);
             li.appendChild(callBtn);
+        
+            const invBtn = document.createElement('button');
+            invBtn.className = 'invite-user-btn';
+            invBtn.innerText = '📨';
+            invBtn.title     = 'Meghívás ebbe a szobába';
+            invBtn.setAttribute('data-invite-target', user);
+            invBtn.onclick = () => window.sendRoomInvite(user);
+            li.appendChild(invBtn);
         }
         dom.userListUl.appendChild(li); 
     }); 
+    if (window.updateProfileDropdown) window.updateProfileDropdown();
 }
 
 // --- Gomb Események (Header) ---
@@ -155,6 +165,8 @@ document.getElementById('change-name-btn').addEventListener('click', () => {
         if (state.socket && state.socket.readyState === WebSocket.OPEN) { 
             state.socket.send(JSON.stringify({ action: 'join', username: state.myUsername, room: state.currentRoom, password: state.currentRoomPassword })); 
         }
+    if (window.updateProfileDropdown) window.updateProfileDropdown();
+    if (window.closeProfileMenu) window.closeProfileMenu();
     }
 });
 
@@ -165,13 +177,15 @@ document.getElementById('avatar-btn').addEventListener('click', () => {
     localStorage.setItem('chatNickname', state.myUsername);
     if (state.socket && state.socket.readyState === WebSocket.OPEN) { 
         state.socket.send(JSON.stringify({ action: 'join', username: state.myUsername, room: state.currentRoom, password: state.currentRoomPassword })); 
+    if (window.updateProfileDropdown) window.updateProfileDropdown();
+    if (window.closeProfileMenu) window.closeProfileMenu();
     }
 });
 
-document.getElementById('theme-toggle').addEventListener('click', () => { 
-    const theme = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark'; 
-    document.documentElement.setAttribute('data-theme', theme); 
-});
+//document.getElementById('theme-toggle').addEventListener('click', () => { 
+ //   const theme = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark'; 
+  //  document.documentElement.setAttribute('data-theme', theme); 
+//});
 
 // --- GLOBÁLIS FÜGGVÉNYEK A HTML GOMBOKHOZ ---
 if (!state.myReactions) state.myReactions = new Set();
