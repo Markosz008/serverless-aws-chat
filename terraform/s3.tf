@@ -204,3 +204,74 @@ resource "null_resource" "cloudfront_invalidation" {
     command = "aws cloudfront create-invalidation --distribution-id ESV32IXWM4EHZ --paths '/*'"
   }
 }
+# --- AVATAR BUCKET (Profilképek tárolása) ---
+
+resource "aws_s3_bucket" "avatar_bucket" {
+  bucket_prefix = "chat-avatars-"
+  force_destroy = true
+}
+
+resource "aws_s3_bucket_ownership_controls" "avatar_ownership" {
+  bucket = aws_s3_bucket.avatar_bucket.id
+  rule {
+    object_ownership = "BucketOwnerPreferred"
+  }
+}
+
+resource "aws_s3_bucket_public_access_block" "avatar_access" {
+  bucket                  = aws_s3_bucket.avatar_bucket.id
+  block_public_acls       = false
+  block_public_policy     = false
+  ignore_public_acls      = false
+  restrict_public_buckets = false
+}
+
+resource "aws_s3_bucket_acl" "avatar_acl" {
+  depends_on = [
+    aws_s3_bucket_ownership_controls.avatar_ownership,
+    aws_s3_bucket_public_access_block.avatar_access,
+  ]
+  bucket = aws_s3_bucket.avatar_bucket.id
+  acl    = "public-read"
+}
+
+# Avatarokat NEM töröljük naponta — maradnak amíg a user nem cseréli
+resource "aws_s3_bucket_lifecycle_configuration" "avatar_lifecycle" {
+  bucket = aws_s3_bucket.avatar_bucket.id
+  rule {
+    id     = "delete-old-avatars"
+    status = "Enabled"
+    # Régi feltöltött avatarokat 90 nap után töröljük
+    expiration { days = 90 }
+  }
+}
+
+resource "aws_s3_bucket_cors_configuration" "avatar_cors" {
+  bucket = aws_s3_bucket.avatar_bucket.id
+  cors_rule {
+    allowed_headers = ["*"]
+    allowed_methods = ["GET", "PUT", "POST", "HEAD"]
+    allowed_origins = ["*"]
+    expose_headers  = ["ETag", "Content-Length"]
+    max_age_seconds = 3600
+  }
+}
+
+resource "aws_s3_bucket_policy" "avatar_public_read" {
+  bucket = aws_s3_bucket.avatar_bucket.id
+  depends_on = [aws_s3_bucket_public_access_block.avatar_access]
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Sid       = "PublicReadAndPut"
+      Effect    = "Allow"
+      Principal = "*"
+      Action    = ["s3:GetObject", "s3:PutObject", "s3:PutObjectAcl"]
+      Resource  = "${aws_s3_bucket.avatar_bucket.arn}/*"
+    }]
+  })
+}
+
+output "avatar_bucket_name" {
+  value = aws_s3_bucket.avatar_bucket.id
+}

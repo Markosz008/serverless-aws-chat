@@ -54,7 +54,6 @@ resource "aws_iam_role_policy" "lambda_policy" {
         Resource = "*"
       },
       {
-        # DynamoDB: Most már mind a HÁROM táblát éri
         Effect = "Allow"
         Action = [
           "dynamodb:PutItem",
@@ -76,9 +75,15 @@ resource "aws_iam_role_policy" "lambda_policy" {
         Resource = "arn:aws:execute-api:${data.aws_region.current.region}:${data.aws_caller_identity.current.account_id}:*/*"
       },
       {
-        Effect   = "Allow",
-        Action   = ["s3:PutObject", "s3:PutObjectAcl", "s3:GetObject", "s3:ListBucket"],
-        Resource = ["${aws_s3_bucket.chat_images.arn}", "${aws_s3_bucket.chat_images.arn}/*"]
+        Effect = "Allow"
+        Action = ["s3:PutObject", "s3:PutObjectAcl", "s3:GetObject", "s3:ListBucket"]
+        Resource = [
+          "${aws_s3_bucket.chat_images.arn}",
+          "${aws_s3_bucket.chat_images.arn}/*",
+          # ÚJ: Avatar bucket jogosultságok
+          "${aws_s3_bucket.avatar_bucket.arn}",
+          "${aws_s3_bucket.avatar_bucket.arn}/*"
+        ]
       }
     ]
   })
@@ -101,6 +106,8 @@ resource "aws_lambda_function" "websocket_handler" {
       MESSAGES_TABLE    = aws_dynamodb_table.messages_table.name
       ROOMS_TABLE       = aws_dynamodb_table.rooms_table.name
       IMAGE_BUCKET      = aws_s3_bucket.chat_images.id
+      # ÚJ: Avatar bucket neve a Lambda számára
+      AVATAR_BUCKET     = aws_s3_bucket.avatar_bucket.id
     }
   }
 }
