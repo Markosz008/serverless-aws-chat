@@ -165,6 +165,42 @@ audio { max-width: 220px; height: 40px; margin-top: 5px; outline: none; }
 #reply-preview-close { position: absolute; right: 15px; top: 50%; transform: translateY(-50%); cursor: pointer; font-weight: bold; font-size: 22px; color: var(--system-text); }
 #reply-preview-sender { font-weight: bold; margin-bottom: 3px; color: var(--text-color); }
 #reply-preview-text { color: var(--system-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 90%; }
+
+/* --- LIGHTBOX (TELJES KÉPERNYŐS KÉP) FIX --- */
+#lightbox {
+    display: none; /* A JS flex-re állítja, amikor megnyílik */
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0, 0, 0, 0.9); /* Sötét, szinte átlátszatlan háttér */
+    z-index: 99999; /* Minden más réteg fölé kerüljön */
+    justify-content: center;
+    align-items: center;
+    padding: 15px; /* Ne érjen teljesen a telefon széléhez */
+    box-sizing: border-box;
+    backdrop-filter: blur(5px); /* Opcionális: homályosítja a hátteret iOS/Modern Androidon */
+}
+
+#lightbox-img {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain; /* EZ A LÉNYEG: Arányosan kicsinyíti a képet a képernyőhöz, vágás nélkül */
+    border-radius: 8px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+    cursor: zoom-out;
+}
+
+#lightbox-close {
+    position: absolute;
+    top: 15px;
+    right: 25px;
+    color: white;
+    font-size: 35px;
+    font-weight: bold;
+    cursor: pointer;
+    z-index: 100000;
+    text-shadow: 0 2px 4px rgba(0,0,0,0.5);
+}
+
 /* ================================================================
    ÚJ TÉMÁK — a meglévő :root és [data-theme="dark"] mellé
    Ezeket ADD HOZZÁ a style.css végéhez.
@@ -173,30 +209,27 @@ audio { max-width: 220px; height: 40px; margin-top: 5px; outline: none; }
 
 /* RETRO / TERMINAL */
 [data-theme="retro"] {
-  --bg-color: #0a0f0a; --container-bg: #0d140d; --text-color: #00e535;
-  --sidebar-bg: #060c06; --sidebar-text: #00cc33; --header-bg: #060c06;
-  --header-text: #00ff41; --input-bg: #0d140d; --border-color: #1a2e1a;
-  --others-msg: #111a11; --others-text: #00cc33;
-  --mine-msg: #003300; --mine-text: #00ff41; --system-text: #2e5c2e;
+  --bg-color:#0a0f0a; --container-bg:#0d140d; --text-color:#00e535;
+  --sidebar-bg:#060c06; --sidebar-text:#00cc33; --header-bg:#060c06;
+  --header-text:#00ff41; --input-bg:#0d140d; --border-color:#1a2e1a;
+  --others-msg:#111a11; --others-text:#00cc33;
+  --mine-msg:#003300; --mine-text:#00ff41; --system-text:#2e5c2e;
 }
-[data-theme="retro"] body { font-family: 'Courier New', monospace; }
-[data-theme="retro"] #send-btn { background:#00ff41; color:#0a0f0a; font-family:'Courier New',monospace; font-weight:bold; }
+[data-theme="retro"] body { font-family:'Courier New',monospace; }
+[data-theme="retro"] #send-btn { background:#00ff41; color:#0a0f0a; font-family:'Courier New',monospace; }
 [data-theme="retro"] #join-btn { background:#00ff41; color:#0a0f0a; }
-[data-theme="retro"] .header-btn { border-color:#00ff4166; color:#00ff41; font-family:'Courier New',monospace; border-radius:3px; }
+[data-theme="retro"] .header-btn { border-color:#00ff4166; color:#00ff41; border-radius:3px; }
 [data-theme="retro"] .message { border-radius:4px; }
-[data-theme="retro"] .message.mine { border:1px solid #00ff4155; }
-[data-theme="retro"] .message.others { border:1px solid #1a2e1a; }
 [data-theme="retro"] #app-container::after {
   content:''; position:absolute; inset:0; pointer-events:none; z-index:9999;
   background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,0.06) 2px,rgba(0,0,0,0.06) 4px);
 }
-
 [data-theme="pastel"] {
-  --bg-color: #fef6ff; --container-bg: #ffffff; --text-color: #4a3060;
-  --sidebar-bg: #f0e4ff; --sidebar-text: #6b4899; --header-bg: #f0e4ff;
-  --header-text: #6b4899; --input-bg: #fef6ff; --border-color: #e8d5f5;
-  --others-msg: #f5eeff; --others-text: #4a3060;
-  --mine-msg: #c084fc; --mine-text: #ffffff; --system-text: #b89dd0;
+  --bg-color:#fef6ff; --container-bg:#fff; --text-color:#4a3060;
+  --sidebar-bg:#f0e4ff; --sidebar-text:#6b4899; --header-bg:#f0e4ff;
+  --header-text:#6b4899; --input-bg:#fef6ff; --border-color:#e8d5f5;
+  --others-msg:#f5eeff; --others-text:#4a3060;
+  --mine-msg:#c084fc; --mine-text:#fff; --system-text:#b89dd0;
 }
 [data-theme="pastel"] .message { border-radius:20px; }
 [data-theme="pastel"] .message.mine { box-shadow:0 4px 14px rgba(192,132,252,0.3); }
@@ -204,36 +237,184 @@ audio { max-width: 220px; height: 40px; margin-top: 5px; outline: none; }
 [data-theme="pastel"] #join-btn { background:#c084fc; }
 [data-theme="pastel"] .header-btn { border-color:#c084fc; color:#c084fc; border-radius:20px; }
 [data-theme="pastel"] #sidebar h3 { color:#c084fc; }
-[data-theme="pastel"] .room-item.active-room { border-left-color:#c084fc; color:#c084fc; background:rgba(192,132,252,0.15); }
-[data-theme="pastel"] .room-item:hover { color:#c084fc; background:rgba(192,132,252,0.1); }
-
+[data-theme="pastel"] .room-item.active-room { border-left-color:#c084fc; color:#c084fc; }
 [data-theme="cyber"] {
-  --bg-color: #08010f; --container-bg: #0f0518; --text-color: #f0e0ff;
-  --sidebar-bg: #07000e; --sidebar-text: #d0a0ff; --header-bg: #07000e;
-  --header-text: #f000ff; --input-bg: #0f0518; --border-color: #2d0a4e;
-  --others-msg: #160820; --others-text: #f0e0ff;
-  --mine-msg: #f000ff; --mine-text: #ffffff; --system-text: #6a3a8a;
+  --bg-color:#08010f; --container-bg:#0f0518; --text-color:#f0e0ff;
+  --sidebar-bg:#07000e; --sidebar-text:#d0a0ff; --header-bg:#07000e;
+  --header-text:#f000ff; --input-bg:#0f0518; --border-color:#2d0a4e;
+  --others-msg:#160820; --others-text:#f0e0ff;
+  --mine-msg:#f000ff; --mine-text:#fff; --system-text:#6a3a8a;
 }
 [data-theme="cyber"] .message.mine { box-shadow:0 0 16px rgba(240,0,255,0.4); border-radius:6px; }
 [data-theme="cyber"] .message.others { border-radius:6px; border:1px solid #2d0a4e; }
 [data-theme="cyber"] #send-btn { background:#f000ff; border-radius:6px; box-shadow:0 0 12px rgba(240,0,255,0.5); }
-[data-theme="cyber"] #join-btn { background:#f000ff; box-shadow:0 0 20px rgba(240,0,255,0.4); border-radius:6px; }
-[data-theme="cyber"] .header-btn { border-color:#f000ff66; color:#f000ff; border-radius:4px; }
+[data-theme="cyber"] #join-btn { background:#f000ff; }
+[data-theme="cyber"] .header-btn { border-color:#f000ff66; color:#f000ff; }
 [data-theme="cyber"] #sidebar h3 { color:#f000ff; }
-[data-theme="cyber"] .room-item.active-room { border-left-color:#f000ff; color:#f000ff; background:rgba(240,0,255,0.1); }
-[data-theme="cyber"] .room-item:hover { color:#00f7ff; background:rgba(0,247,255,0.08); }
-
-/* ── PROFIL DROPDOWN ─────────────────────────────────────────── */
-
+[data-theme="cyber"] .room-item.active-room { border-left-color:#f000ff; color:#f000ff; }
+ 
+/* ── MOBIL HEADER FIX ──────────────────────────────────────────
+   A #header flex layout mobilon ne csússzon szét
+──────────────────────────────────────────────────────────────── */
+#header {
+  /* felülírjuk az inline style flex-wrap-et — nem wrap, hanem nowrap */
+  flex-wrap: nowrap !important;
+  overflow: hidden;
+}
+#header-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;  /* NE zsugorodjon */
+  min-width: 0;
+}
+#header-right {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  flex-shrink: 0;  /* NE zsugorodjon */
+  margin-left: auto;
+}
+/* Header avatar buborék (emoji + foto egységes keret) */
+#header-avatar-wrap {
+  width: 36px; height: 36px;
+  border-radius: 50%;
+  background: var(--sidebar-bg);
+  border: 2px solid rgba(255,153,0,0.4);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 20px; cursor: pointer; flex-shrink: 0;
+  overflow: hidden;
+  transition: transform 0.2s, border-color 0.2s;
+}
+#header-avatar-wrap:hover { transform: scale(1.08); border-color: #ff9900; }
+#header-avatar-photo { width:100%; height:100%; object-fit:cover; border-radius:50%; }
+#header-chat-title   { font-size:18px; white-space:nowrap; }
+ 
+/* Mobilon kisebb gombok */
+@media (max-width: 480px) {
+  #header-right .header-btn { font-size:11px; padding:4px 7px; }
+  #header-avatar-wrap        { width:30px; height:30px; font-size:16px; }
+}
+ 
+/* ── AVATAR MODAL ──────────────────────────────────────────────── */
+#avatar-modal-overlay {
+  display:none; position:fixed; inset:0; z-index:2000;
+  background:rgba(0,0,0,0.5); backdrop-filter:blur(4px);
+}
+#avatar-modal-overlay.active { display:block; }
+ 
+#avatar-modal {
+  display:none; position:fixed; z-index:2100;
+  top:50%; left:50%; transform:translate(-50%,-50%);
+  width:min(360px,94vw);
+  background:var(--container-bg); border:1px solid var(--border-color);
+  border-radius:20px; padding:20px;
+  flex-direction:column; gap:14px;
+  box-shadow:0 24px 60px rgba(0,0,0,0.5);
+  animation:modalIn 0.22s ease-out;
+  max-height:90vh; overflow-y:auto;
+}
+#avatar-modal.open { display:flex; }
+ 
+@keyframes modalIn {
+  from { opacity:0; transform:translate(-50%,-50%) scale(0.93); }
+  to   { opacity:1; transform:translate(-50%,-50%) scale(1); }
+}
+ 
+#avatar-modal-header {
+  display:flex; justify-content:space-between; align-items:center;
+  font-weight:700; font-size:15px; color:var(--text-color);
+}
+#avatar-modal-close {
+  background:var(--bg-color); border:1px solid var(--border-color);
+  border-radius:50%; width:28px; height:28px; cursor:pointer;
+  color:var(--text-color); font-size:14px;
+  display:flex; align-items:center; justify-content:center;
+}
+ 
+/* Előnézet */
+#avatar-preview-wrap {
+  display:flex; flex-direction:column; align-items:center; gap:8px;
+}
+#avatar-preview-circle {
+  width:80px; height:80px; border-radius:50%;
+  background:var(--bg-color); border:3px solid #ff9900;
+  display:flex; align-items:center; justify-content:center;
+  font-size:48px; overflow:hidden;
+}
+#avatar-preview-photo { width:100%; height:100%; object-fit:cover; border-radius:50%; }
+#avatar-preview-name  { font-weight:700; font-size:14px; color:var(--text-color); }
+ 
+/* Tabok */
+#avatar-tab-row { display:flex; gap:8px; }
+.avatar-tab {
+  flex:1; padding:8px; border-radius:10px;
+  background:var(--bg-color); border:1px solid var(--border-color);
+  color:var(--system-text); font-size:13px; font-weight:600; cursor:pointer;
+  transition:all 0.15s;
+}
+.avatar-tab.active { background:#ff9900; color:#fff; border-color:#ff9900; }
+ 
+/* Emoji grid */
+#emoji-avatar-grid {
+  display:grid; grid-template-columns:repeat(8,1fr); gap:6px;
+  max-height:180px; overflow-y:auto;
+  padding:4px;
+}
+.emoji-av-btn {
+  aspect-ratio:1; border-radius:8px; border:2px solid transparent;
+  background:var(--bg-color); font-size:22px; cursor:pointer;
+  transition:all 0.15s; display:flex; align-items:center; justify-content:center;
+}
+.emoji-av-btn:hover  { border-color:var(--border-color); transform:scale(1.1); }
+.emoji-av-btn.selected { border-color:#ff9900; background:rgba(255,153,0,0.12); }
+ 
+/* Foto feltöltő */
+#photo-upload-area {
+  border:2px dashed var(--border-color); border-radius:12px;
+  padding:24px 16px; text-align:center; cursor:pointer;
+  transition:border-color 0.2s; min-height:100px;
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  gap:6px;
+}
+#photo-upload-area:hover { border-color:#ff9900; }
+#photo-upload-icon { font-size:32px; }
+#photo-upload-text { font-size:13px; font-weight:600; color:var(--text-color); }
+#photo-upload-sub  { font-size:11px; color:var(--system-text); }
+ 
+#photo-upload-progress {
+  display:flex; align-items:center; gap:10px;
+  background:var(--bg-color); border-radius:8px; padding:8px 12px;
+}
+#photo-upload-bar {
+  flex:1; height:6px; border-radius:3px;
+  background:#ff9900; transition:width 0.2s;
+}
+#photo-upload-pct { font-size:12px; color:var(--system-text); min-width:32px; }
+ 
+#remove-photo-btn {
+  background:rgba(255,59,48,0.1); border:1px solid rgba(255,59,48,0.3);
+  color:#ff3b30; border-radius:10px; padding:8px 14px;
+  font-size:13px; cursor:pointer; width:100%;
+}
+#remove-photo-btn:hover { background:rgba(255,59,48,0.2); }
+ 
+/* Mentés gomb */
+#avatar-save-btn {
+  background:#ff9900; color:#fff; border:none;
+  border-radius:12px; padding:12px; font-size:14px; font-weight:700;
+  cursor:pointer; transition:filter 0.15s;
+}
+#avatar-save-btn:hover { filter:brightness(1.1); }
+ 
+/* ── PROFIL DROPDOWN ───────────────────────────────────────────── */
 #profile-overlay {
   display:none; position:fixed; inset:0; z-index:1500; touch-action:none;
 }
 #profile-overlay.active { display:block; }
-
+ 
 #profile-dropdown {
-  display:none; position:fixed;
-  /* top/left dinamikusan állítódik JS-ből (positionProfileDropdown) */
-  width:230px;
+  display:none; position:fixed; width:235px;
   background:var(--container-bg); border:1px solid var(--border-color);
   border-radius:16px; padding:8px; z-index:1600;
   box-shadow:0 12px 40px rgba(0,0,0,0.35);
@@ -241,134 +422,76 @@ audio { max-width: 220px; height: 40px; margin-top: 5px; outline: none; }
   animation:profileDropIn 0.18s ease-out;
 }
 #profile-dropdown.open { display:flex; }
-
 @keyframes profileDropIn {
   from { opacity:0; transform:translateY(-8px) scale(0.96); }
-  to   { opacity:1; transform:translateY(0)    scale(1); }
+  to   { opacity:1; transform:translateY(0) scale(1); }
 }
-
+ 
 #profile-dropdown-header {
   display:flex; align-items:center; gap:10px;
   padding:10px 10px 12px; border-bottom:1px solid var(--border-color); margin-bottom:4px;
 }
-#profile-dropdown-avatar {
+#profile-dropdown-avatar-wrap {
   width:42px; height:42px; border-radius:50%;
-  background:var(--bg-color); flex-shrink:0; border:2px solid var(--border-color);
-  object-fit:cover;
+  background:var(--bg-color); border:2px solid var(--border-color);
+  display:flex; align-items:center; justify-content:center;
+  font-size:26px; flex-shrink:0; overflow:hidden;
 }
-#profile-dropdown-info { flex:1; min-width:0; }
+#profile-dd-photo { width:100%; height:100%; object-fit:cover; border-radius:50%; }
 #profile-dropdown-name { font-weight:700; font-size:14px; color:var(--text-color); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 #profile-dropdown-tag  { font-size:11px; color:var(--system-text); margin-top:2px; }
-
+ 
 .profile-menu-item {
   display:flex; align-items:center; gap:10px; width:100%;
   padding:9px 10px; background:transparent; border:none; border-radius:10px;
   cursor:pointer; text-align:left; transition:background 0.15s; color:var(--text-color);
 }
 .profile-menu-item:hover { background:var(--bg-color); }
-.pmi-icon {
-  width:32px; height:32px; border-radius:8px; background:var(--bg-color);
-  border:1px solid var(--border-color); display:flex; align-items:center;
-  justify-content:center; font-size:16px; flex-shrink:0;
-}
+.pmi-icon { width:32px; height:32px; border-radius:8px; background:var(--bg-color); border:1px solid var(--border-color); display:flex; align-items:center; justify-content:center; font-size:16px; flex-shrink:0; }
 .pmi-label { font-size:13.5px; font-weight:600; color:var(--text-color); }
 .pmi-sub   { font-size:11px; color:var(--system-text); margin-top:1px; }
 .profile-menu-sep { height:1px; background:var(--border-color); margin:3px 6px; }
-
-/* Toggle switch a profilmenüben */
+ 
 .pmi-switch {
   width:36px; height:20px; border-radius:10px;
-  background:var(--border-color); position:relative;
-  flex-shrink:0; transition:background 0.2s;
+  background:var(--border-color); position:relative; flex-shrink:0; transition:background 0.2s;
 }
 .pmi-switch::after {
   content:''; position:absolute; top:3px; left:3px;
-  width:14px; height:14px; border-radius:50%;
-  background:#fff; transition:transform 0.2s;
+  width:14px; height:14px; border-radius:50%; background:#fff; transition:transform 0.2s;
 }
 .pmi-switch.active { background:#ff9900; }
 .pmi-switch.active::after { transform:translateX(16px); }
-
-/* Téma-specifikus dropdown */
-[data-theme="retro"] #profile-dropdown { border-radius:4px; border-color:#00ff4155; box-shadow:0 0 20px rgba(0,255,65,0.15); }
-[data-theme="retro"] .profile-menu-item { border-radius:3px; }
-[data-theme="retro"] .pmi-icon { border-radius:3px; }
-[data-theme="cyber"] #profile-dropdown { border-radius:6px; border-color:#f000ff55; box-shadow:0 0 30px rgba(240,0,255,0.2); }
-[data-theme="cyber"] .profile-menu-item { border-radius:4px; }
-[data-theme="cyber"] .pmi-label { color:#f0e0ff; }
-[data-theme="cyber"] .pmi-switch.active { background:#f000ff; }
-[data-theme="pastel"] #profile-dropdown { border-radius:20px; border-color:#e8d5f5; box-shadow:0 8px 30px rgba(192,132,252,0.2); }
-[data-theme="pastel"] .profile-menu-item { border-radius:14px; }
-[data-theme="pastel"] .pmi-icon { border-radius:10px; }
-[data-theme="pastel"] .pmi-switch.active { background:#c084fc; }
-
-/* Header avatar ikon */
-#header-avatar-icon {
-  width:34px; height:34px; border-radius:50%; cursor:pointer;
-  border:2px solid rgba(255,153,0,0.4); background:var(--sidebar-bg);
-  flex-shrink:0; transition:transform 0.2s, border-color 0.2s; object-fit:cover;
-}
-#header-avatar-icon:hover { transform:scale(1.08); border-color:#ff9900; }
-
-/* ── TÉMA PANEL ──────────────────────────────────────────────── */
-
-#theme-panel-overlay {
-  display:none; position:fixed; inset:0; z-index:1500; touch-action:none;
-}
+ 
+/* ── TÉMA PANEL ────────────────────────────────────────────────── */
+#theme-panel-overlay { display:none; position:fixed; inset:0; z-index:1500; touch-action:none; }
 #theme-panel-overlay.active { display:block; }
-
 #theme-panel {
   display:none; position:fixed; bottom:0; left:50%;
   transform:translateX(-50%) translateY(10px);
-  width:min(420px, 100%); background:var(--container-bg);
+  width:min(420px,100%); background:var(--container-bg);
   border:1px solid var(--border-color); border-bottom:none;
-  border-radius:20px 20px 0 0; padding:20px 16px 28px;
-  z-index:1600; box-shadow:0 -8px 40px rgba(0,0,0,0.3);
+  border-radius:20px 20px 0 0; padding:20px 16px 28px; z-index:1600;
+  box-shadow:0 -8px 40px rgba(0,0,0,0.3);
   flex-direction:column; gap:14px;
   animation:themePanelUp 0.22s ease-out forwards;
 }
 #theme-panel.open { display:flex; }
-
 @keyframes themePanelUp {
   from { opacity:0; transform:translateX(-50%) translateY(30px); }
   to   { opacity:1; transform:translateX(-50%) translateY(0); }
 }
-
-#theme-panel-title {
-  font-size:13px; font-weight:700; color:var(--system-text);
-  letter-spacing:0.07em; text-transform:uppercase; text-align:center;
-}
+#theme-panel-title { font-size:13px; font-weight:700; color:var(--system-text); letter-spacing:.07em; text-transform:uppercase; text-align:center; }
 #theme-options { display:flex; gap:8px; justify-content:center; }
-
-.theme-opt {
-  display:flex; flex-direction:column; align-items:center; gap:6px;
-  padding:10px 8px; border-radius:12px; border:2px solid transparent;
-  background:var(--bg-color); cursor:pointer;
-  font-size:11px; font-weight:600; color:var(--system-text);
-  transition:all 0.2s; flex:1; min-width:0;
-}
+.theme-opt { display:flex; flex-direction:column; align-items:center; gap:6px; padding:10px 8px; border-radius:12px; border:2px solid transparent; background:var(--bg-color); cursor:pointer; font-size:11px; font-weight:600; color:var(--system-text); transition:all 0.2s; flex:1; min-width:0; }
 .theme-opt:hover { transform:translateY(-2px); border-color:var(--border-color); color:var(--text-color); }
 .theme-opt.active { border-color:#ff9900 !important; color:var(--text-color); }
-.theme-swatch {
-  width:38px; height:38px; border-radius:10px;
-  display:flex; align-items:center; justify-content:center; font-size:18px;
-}
-
-[data-theme="retro"] #theme-panel  { border-color:#00ff4133; border-radius:4px 4px 0 0; }
-[data-theme="retro"] .theme-opt    { border-radius:3px; }
-[data-theme="retro"] .theme-opt.active { border-color:#00ff41 !important; }
-[data-theme="cyber"] #theme-panel  { border-color:#f000ff44; border-radius:8px 8px 0 0; }
-[data-theme="cyber"] .theme-opt    { border-radius:6px; }
-[data-theme="cyber"] .theme-opt.active { border-color:#f000ff !important; }
-[data-theme="pastel"] #theme-panel { border-color:#e8d5f5; border-radius:24px 24px 0 0; }
-[data-theme="pastel"] .theme-opt   { border-radius:16px; }
-[data-theme="pastel"] .theme-opt.active { border-color:#c084fc !important; }
-
-/* ── SZOBA MEGHÍVÓ TOAST ─────────────────────────────────────── */
-
+.theme-swatch { width:38px; height:38px; border-radius:10px; display:flex; align-items:center; justify-content:center; font-size:18px; }
+ 
+/* ── SZOBA MEGHÍVÓ TOAST ───────────────────────────────────────── */
 #invite-toast {
-  position:fixed; top:-120px; left:50%; transform:translateX(-50%);
-  width:min(340px, calc(100vw - 24px));
+  position:fixed; top:-130px; left:50%; transform:translateX(-50%);
+  width:min(340px,calc(100vw - 24px));
   background:var(--container-bg); border:1px solid var(--border-color);
   border-radius:16px; padding:12px 14px; z-index:2000;
   box-shadow:0 8px 30px rgba(0,0,0,0.35);
@@ -376,43 +499,42 @@ audio { max-width: 220px; height: 40px; margin-top: 5px; outline: none; }
   display:flex; flex-direction:column; gap:10px;
 }
 #invite-toast.show { top:14px; }
-
 #invite-toast-content { display:flex; align-items:center; gap:10px; }
-#invite-toast-avatar  { width:38px; height:38px; border-radius:50%; object-fit:cover; background:var(--bg-color); flex-shrink:0; }
-#invite-toast-name    { font-weight:700; font-size:14px; color:var(--text-color); }
-#invite-toast-room    { font-size:12px; color:var(--system-text); margin-top:2px; }
+#invite-toast-avatar-wrap { width:38px; height:38px; border-radius:50%; background:var(--bg-color); border:2px solid var(--border-color); display:flex; align-items:center; justify-content:center; font-size:22px; flex-shrink:0; overflow:hidden; }
+#invite-toast-photo  { width:100%; height:100%; object-fit:cover; border-radius:50%; }
+#invite-toast-name   { font-weight:700; font-size:14px; color:var(--text-color); }
+#invite-toast-room   { font-size:12px; color:var(--system-text); margin-top:2px; }
 #invite-toast-actions { display:flex; gap:8px; }
-
-#invite-accept-btn {
-  flex:1; background:#ff9900; color:#fff; border:none;
-  border-radius:10px; padding:8px 12px; font-size:13px; font-weight:700;
-  cursor:pointer; transition:filter 0.15s;
-}
+#invite-accept-btn { flex:1; background:#ff9900; color:#fff; border:none; border-radius:10px; padding:8px 12px; font-size:13px; font-weight:700; cursor:pointer; }
 #invite-accept-btn:hover { filter:brightness(1.1); }
-#invite-decline-btn {
-  background:var(--bg-color); color:var(--system-text);
-  border:1px solid var(--border-color); border-radius:10px;
-  padding:8px 14px; font-size:14px; font-weight:700;
-  cursor:pointer; transition:background 0.15s;
-}
-#invite-decline-btn:hover { background:var(--border-color); }
-
-/* ── MEGHÍVÓ GOMB A USER LISTÁN ──────────────────────────────── */
-
+#invite-decline-btn { background:var(--bg-color); color:var(--system-text); border:1px solid var(--border-color); border-radius:10px; padding:8px 14px; font-size:14px; font-weight:700; cursor:pointer; }
+ 
+/* ── MEGHÍVÓ GOMB USER LISTÁN ──────────────────────────────────── */
 .invite-user-btn {
   background:rgba(255,153,0,0.15); border:1px solid rgba(255,153,0,0.4);
-  border-radius:50%; padding:4px; font-size:12px; cursor:pointer;
+  border-radius:50%; font-size:12px; cursor:pointer;
   display:flex; align-items:center; justify-content:center;
-  width:26px; height:26px; transition:0.2s; margin-left:4px;
+  width:26px; height:26px; transition:0.2s; margin-left:4px; flex-shrink:0;
 }
 .invite-user-btn:hover { background:#ff9900; color:#fff; transform:scale(1.1); }
-
-/* ── MOBIL KIEGÉSZÍTÉSEK ─────────────────────────────────────── */
-
-@media (max-width: 650px) {
-  #header-avatar-icon { width:30px; height:30px; }
-  #profile-dropdown   { width:calc(100vw - 16px); max-width:300px; }
+ 
+/* ── AVATAR MEGJELENÍTÉS AZ ÜZENETEKBEN ────────────────────────── */
+/* A meglévő .avatar-img helyett emoji vagy foto */
+.avatar-wrap {
+  width:32px; height:32px; border-radius:50%;
+  flex-shrink:0; display:flex; align-items:center; justify-content:center;
+  font-size:18px; background:var(--bg-color);
+  overflow:hidden; align-self:flex-end; margin-bottom:2px;
+}
+.avatar-wrap img  { width:100%; height:100%; object-fit:cover; }
+.avatar-wrap.hidden { visibility:hidden; }
+ 
+/* ── MOBIL KIEGÉSZÍTÉSEK ───────────────────────────────────────── */
+@media (max-width:650px) {
+  #profile-dropdown { width:calc(100vw - 16px); max-width:300px; }
   body.keyboard-open #profile-dropdown,
-  body.keyboard-open #theme-panel { display:none !important; }
+  body.keyboard-open #theme-panel,
+  body.keyboard-open #avatar-modal { display:none !important; }
+  #emoji-avatar-grid { grid-template-columns:repeat(6,1fr); }
   #invite-toast { width:calc(100vw - 24px); }
 }

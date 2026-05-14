@@ -9,6 +9,9 @@ import urllib.parse
 import base64
 from botocore.config import Config
 
+# --- ÚJ: Importáljuk a webpush könyvtárat a Layerből ---
+from pywebpush import webpush, WebPushException
+
 s3_config = Config(signature_version='s3v4')
 dynamodb = boto3.client('dynamodb')
 s3_client = boto3.client('s3', config=s3_config)
@@ -17,6 +20,12 @@ CONNECTIONS_TABLE = os.environ.get('CONNECTIONS_TABLE', 'websocket-connections')
 MESSAGES_TABLE = os.environ.get('MESSAGES_TABLE', 'chat-messages')
 ROOMS_TABLE = os.environ.get('ROOMS_TABLE', 'chat-rooms')
 IMAGE_BUCKET = os.environ.get('IMAGE_BUCKET')
+AVATAR_BUCKET = os.environ.get('AVATAR_BUCKET', IMAGE_BUCKET)
+
+# --- ÚJ: Változók a Push értesítésekhez ---
+SUBSCRIPTIONS_TABLE = os.environ.get('SUBSCRIPTIONS_TABLE', 'chat-push-subscriptions')
+VAPID_PRIVATE_KEY = os.environ.get('VAPID_PRIVATE_KEY')
+VAPID_CONTACT_EMAIL = os.environ.get('VAPID_CONTACT_EMAIL', 'mailto:admin@example.com')
 
 def get_meta_content(html, property_name):
     patterns = [
@@ -55,7 +64,25 @@ def lambda_handler(event, context):
         body = json.loads(event.get('body', '{}'))
         action = body.get('action')
 
-        if action == 'join':
+        # --- ÚJ: Push feliratkozás mentése a DynamoDB-be ---
+        if action == 'savePushSub':
+            username = body.get('username')
+            subscription = body.get('subscription')
+            if username and subscription:
+                try:
+                    dynamodb.put_item(
+                        TableName=SUBSCRIPTIONS_TABLE,
+                        Item={
+                            'username': {'S': username},
+                            'subscription': {'S': json.dumps(subscription)}
+                        }
+                    )
+                    print(f"Push engedély elmentve {username} számára.")
+                except Exception as e:
+                    print(f"Hiba a push engedély mentésekor: {e}")
+            return {'statusCode': 200}
+
+        elif action == 'join':
             username = body.get('username', 'Anonim')
             target_room = body.get('room', 'main')
             password = body.get('password', '')
@@ -81,7 +108,6 @@ def lambda_handler(event, context):
                     current_time = int(time.time())
                     
                     for item in res.get('Items', []):
-                        # --- ÚJ: Azonnali TTL szűrés ---
                         exp = item.get('expiresAt', {}).get('N')
                         if exp and int(exp) < current_time:
                             continue
@@ -112,12 +138,10 @@ def lambda_handler(event, context):
             room = body.get('room', 'main') 
             temp_id = body.get('tempId')
             
-            # --- ÚJ: Explicit Secret Mode Flag fogadása a frontedről ---
             is_secret = body.get('isSecretMode', False)
             
             timestamp = int(time.time() * 1000)
             
-            # Ha a kliens azt mondta, hogy ez titkos, akkor 5 perc, egyébként 30 nap
             if is_secret:
                 expires_at = int(time.time()) + (5 * 60)
             else:
@@ -175,43 +199,36 @@ def lambda_handler(event, context):
                     return {'statusCode': 200}
                 prompt = message.replace('/kaland', '').strip()
                 ai_message = ""
-                audio_url = None # ÚJ: Változó az S3 linknek
+                audio_url = None 
                 
                 try:
-                    # 1. SZÖVEG GENERÁLÁS BEDROCKKAL (Magyarul a UI-nak)
                     bedrock = boto3.client('bedrock-runtime', region_name='eu-central-1')
                     model_arn = 'arn:aws:bedrock:eu-central-1:682356774927:inference-profile/eu.anthropic.claude-haiku-4-5-20251001-v1:0'
                     messages_payload = [{"role": "user", "content": [{"text": f"Te egy magyar nyelvű humoros, titokzatos Kalandmester (Dungeon Master) vagy. Egy játékos ezt lépi a kalandban: '{prompt}'. Reagálj rá izgalmasan, fantázia stílusban maximum 3 mondatban, és tegyél fel neki egy újabb kérdést vagy kihívást!"}]}]
                     resp = bedrock.converse(modelId=model_arn, messages=messages_payload, inferenceConfig={"maxTokens": 400})
                     ai_message = resp['output']['message']['content'][0]['text']
                     
-                    # 1.5. VILLÁMGYORS FORDÍTÁS (Szigorú Emoji és leírás tiltás)
                     translate_payload = [{"role": "user", "content": [{"text": f"Translate this Hungarian fantasy text to epic British English. CRITICAL INSTRUCTION: Ignore all emojis completely! Do NOT write the word 'emoji'. Do NOT describe the emojis. Just translate the spoken words. Text to translate: {ai_message}"}]}]
                     trans_resp = bedrock.converse(modelId=model_arn, messages=translate_payload, inferenceConfig={"maxTokens": 400})
                     english_audio_text = trans_resp['output']['message']['content'][0]['text'].strip()
                     
-                    # BIZTONSÁGI TISZTÍTÁS: Kivágjuk a Claude által esetleg beletett [dragon emoji] szerű szövegeket
                     english_audio_text = re.sub(r'\[.*?\]', '', english_audio_text)
                     english_audio_text = re.sub(r'\(.*?\)', '', english_audio_text)
                     english_audio_text = english_audio_text.replace('emoji', '').replace('Emoji', '')
                     
-                    # 2. HANG GENERÁLÁS POLLY-VAL (BRIT ANGOL, NEURAL, NINCS TORZÍTÁS)
                     polly = boto3.client('polly', region_name='eu-central-1')
                     
                     safe_text = english_audio_text.replace('&', 'and').replace('<', '').replace('>', '')
-                    
-                    # Teljesen tiszta speak tag - hagyjuk a Neural motort dolgozni!
                     ssml_text = f'<speak>{safe_text}</speak>'
                     
                     polly_res = polly.synthesize_speech(
                         Text=ssml_text,
                         OutputFormat='mp3',
                         TextType='ssml',
-                        VoiceId='Arthur', # <--- BRIT FANTASY NARRÁTOR
+                        VoiceId='Arthur', 
                         Engine='neural'
                     )
                     
-                    # 3. HANG MENTÉSE S3-BA
                     audio_key = f"kaland_audio_{uuid.uuid4()}.mp3"
                     s3_client.put_object(
                         Bucket=IMAGE_BUCKET, 
@@ -226,7 +243,6 @@ def lambda_handler(event, context):
                     print(f"BEDROCK/POLLY HIBA: {str(e)}")
                     ai_message = f"🧙‍♂️ Rendszerhiba a Kalandmesternél... Hiba: {str(e)[:50]}"
                 
-                # 4. MENTÉS A DYNAMODB-BE
                 ai_msg_id = str(uuid.uuid4())
                 ai_timestamp = timestamp + 1
                 ai_sender = "🧙‍♂️ Kalandmester|ai"
@@ -237,13 +253,11 @@ def lambda_handler(event, context):
                     'expiresAt': {'N': str(expires_at)}, 'isRead': {'BOOL': False}
                 }
                 
-                # Ha van hang, azt is beletesszük az adatbázisba
                 if audio_url:
                     ai_item['audioUrl'] = {'S': audio_url}
                     
                 dynamodb.put_item(TableName=MESSAGES_TABLE, Item=ai_item)
                 
-                # 5. KIKÜLDÉS A KLIENSEKNEK (WEBSOCKET)
                 broadcast_payload = {
                     'type': 'chat', 'msgId': ai_msg_id, 'sender': ai_sender, 
                     'deviceId': 'AI_BOT', 'message': ai_message, 'timestamp': ai_timestamp
@@ -332,10 +346,59 @@ def lambda_handler(event, context):
             msg_id = body.get('msgId')
             ts = body.get('timestamp')
             room = body.get('room', 'main')
+            
+            print(f"[DEBUG] markRead hívás érkezett: msgId={msg_id}, timestamp={ts}")
+            
             if msg_id and ts:
-                try: dynamodb.update_item(TableName=MESSAGES_TABLE, Key={'room': {'S': room}, 'timestamp': {'N': str(ts)}}, UpdateExpression="SET isRead = :r", ExpressionAttributeValues={':r': {'BOOL': True}})
-                except: pass
-            if apigw_management: broadcast(apigw_management, {'type': 'msgRead', 'msgId': msg_id}, room)
+                try: 
+                    dynamodb.update_item(
+                        TableName=MESSAGES_TABLE, 
+                        Key={'room': {'S': room}, 'timestamp': {'N': str(ts)}}, 
+                        UpdateExpression="SET isRead = :r", 
+                        ExpressionAttributeValues={':r': {'BOOL': True}}
+                    )
+                    print("[DEBUG] DynamoDB sikeresen frissítve (isRead=True).")
+                except Exception as e: 
+                    print(f"[ERROR] DynamoDB markRead mentési hiba: {str(e)}")
+                    
+            if apigw_management: 
+                try:
+                    broadcast(apigw_management, {'type': 'msgRead', 'msgId': msg_id}, room)
+                except Exception as e:
+                    print(f"[ERROR] Broadcast markRead hiba: {str(e)}")
+
+        elif action == 'deleteMessage':
+            msg_id = body.get('msgId')
+            ts = body.get('timestamp')
+            room = body.get('room', 'main')
+            sender = body.get('username')
+            
+            print(f"[DEBUG] Visszavonás kérés: msgId={msg_id}")
+            if msg_id and ts and sender:
+                try:
+                    item_resp = dynamodb.get_item(TableName=MESSAGES_TABLE, Key={'room': {'S': room}, 'timestamp': {'N': str(ts)}})
+                    item = item_resp.get('Item')
+                    
+                    if item:
+                        db_sender = item.get('sender', {}).get('S', '')
+                        if db_sender.split('|')[0] == sender.split('|')[0]:
+                            
+                            # JAVÍTÁS: Logikai törlés! Nem töröljük a sort, 
+                            # csak átírjuk a szövegét "DELETED_MSG"-re és levesszük a reakciókat.
+                            dynamodb.update_item(
+                                TableName=MESSAGES_TABLE, 
+                                Key={'room': {'S': room}, 'timestamp': {'N': str(ts)}},
+                                UpdateExpression="SET message = :m REMOVE reactions",
+                                ExpressionAttributeValues={':m': {'S': 'DELETED_MSG'}}
+                            )
+                            print("[DEBUG] Üzenet logikailag törölve (DELETED_MSG).")
+                            
+                            if apigw_management:
+                                broadcast(apigw_management, {'type': 'deleteMessage', 'msgId': msg_id}, room)
+                        else:
+                            print(f"[WARNING] Törlés elutasítva: {db_sender} nem egyenlő {sender}")
+                except Exception as e:
+                    print(f"[ERROR] DynamoDB törlési hiba: {str(e)}")
 
         elif action == 'typing':
             if apigw_management: broadcast(apigw_management, {'type': 'typing', 'sender': body.get('username'), 'typing': body.get('typing')}, body.get('room', 'main'))
@@ -376,24 +439,26 @@ def lambda_handler(event, context):
                 broadcast(apigw_management, {'type': 'reaction', 'msgId': msg_id, 'emoji': emoji, 'isAdd': is_add, 'username': username}, room)
 
         elif action == 'roomInvite':
-            target_user = body.get('targetUser')
-            sender = body.get('username')
-            room = body.get('room', 'main')
+            target_user = body.get('targetUser', '')
+            sender      = body.get('username')
+            room        = body.get('room', 'main')
+            password    = body.get('password', '') 
             if apigw_management:
                 conns = dynamodb.scan(TableName=CONNECTIONS_TABLE).get('Items', [])
                 for c in conns:
-                    if c.get('username', {}).get('S') == target_user:
+                    conn_user = c.get('username', {}).get('S', '')
+                    if conn_user.split('|')[0] == target_user.split('|')[0]:
                         try:
                             apigw_management.post_to_connection(
                                 ConnectionId=c['connectionId']['S'],
                                 Data=json.dumps({
                                     'type': 'roomInvite',
                                     'sender': sender,
-                                    'room': room
+                                    'room': room,
+                                    'password': password 
                                 }).encode('utf-8')
                             )
-                        except:
-                            pass
+                        except: pass
 
         elif action == 'getUploadUrl':
             try:
@@ -402,15 +467,95 @@ def lambda_handler(event, context):
                 if apigw_management: apigw_management.post_to_connection(ConnectionId=connection_id, Data=json.dumps({'uploadUrl': url, 'fileUrl': f"https://s3.eu-central-1.amazonaws.com/{IMAGE_BUCKET}/{safe_name}"}))
             except Exception as e: print(f"S3 Hiba: {str(e)}")
 
+        elif action == 'getAvatarUploadUrl':
+            try:
+                safe_name = f"avatars/{uuid.uuid4()}_{body.get('fileName', 'avatar.jpg')}"
+                url = boto3.client('s3', region_name='eu-central-1',
+                    config=Config(signature_version='s3v4', s3={'addressing_style': 'path'})
+                ).generate_presigned_url('put_object',
+                    Params={'Bucket': AVATAR_BUCKET, 'Key': safe_name, 'ContentType': body.get('contentType', 'image/jpeg')},
+                    ExpiresIn=300
+                )
+                file_url = f"https://s3.eu-central-1.amazonaws.com/{AVATAR_BUCKET}/{safe_name}"
+                if apigw_management:
+                    apigw_management.post_to_connection(
+                        ConnectionId=connection_id,
+                        Data=json.dumps({'avatarUploadUrl': url, 'avatarFileUrl': file_url}).encode('utf-8')
+                    )
+            except Exception as e:
+                print(f"Avatar S3 hiba: {e}")
+
         return {'statusCode': 200}
     return {'statusCode': 400}
 
+# --- ÚJ: A Broadcast függvény felokosítása a Web Push-hoz ---
+# --- ÚJ: A Broadcast függvény felokosítása a Web Push-hoz ---
 def broadcast(apigw_management, payload, target_room):
-    for item in dynamodb.scan(TableName=CONNECTIONS_TABLE).get('Items', []):
-        if item.get('room', {}).get('S', 'main') == target_room:
-            try: apigw_management.post_to_connection(ConnectionId=item['connectionId']['S'], Data=json.dumps(payload).encode('utf-8'))
-            except: dynamodb.delete_item(TableName=CONNECTIONS_TABLE, Key={'connectionId': item['connectionId']})
+    # 1. Lekérjük a kapcsolatokat az adatbázisból
+    online_connections = dynamodb.scan(TableName=CONNECTIONS_TABLE).get('Items', [])
+    successful_users = set() # ÚJ: Csak a BIZONYÍTOTTAN online usereket gyűjtjük
 
-def broadcast_user_list(apigw_management, target_room):
-    users = list(set([i['username']['S'] for i in dynamodb.scan(TableName=CONNECTIONS_TABLE).get('Items', []) if i.get('room', {}).get('S', 'main') == target_room and i['username']['S'] != 'Ismeretlen']))
-    broadcast(apigw_management, {'type': 'userList', 'users': users}, target_room)
+    for item in online_connections:
+        if item.get('room', {}).get('S', 'main') == target_room:
+            username = item.get('username', {}).get('S')
+            try: 
+                # Megpróbáljuk elküldeni az üzenetet WebSocketen
+                apigw_management.post_to_connection(ConnectionId=item['connectionId']['S'], Data=json.dumps(payload).encode('utf-8'))
+                if username:
+                    successful_users.add(username) # Ha nem halt el, akkor TÉNYLEG online!
+            except: 
+                # Ha elhalt, töröljük a "szellem" kapcsolatot
+                dynamodb.delete_item(TableName=CONNECTIONS_TABLE, Key={'connectionId': item['connectionId']})
+
+    # 2. Push kiküldése (a szellem-kapcsolatokat így már kiszűrjük)
+    if payload.get('type') == 'chat' and VAPID_PRIVATE_KEY:
+        try:
+            sender_name = payload.get('sender', '').split('|')[0]
+            msg_text = payload.get('message', '')
+            
+            if msg_text.startswith('U2FsdGVkX1'):
+                msg_text = "🔒 Titkosított üzenet érkezett"
+            elif 's3.eu-central-1.amazonaws.com' in msg_text:
+                msg_text = "📸 Fájl vagy Hangüzenet érkezett"
+            
+            subscriptions = dynamodb.scan(TableName=SUBSCRIPTIONS_TABLE).get('Items', [])
+            
+            for sub_item in subscriptions:
+                sub_username = sub_item.get('username', {}).get('S')
+                
+                # JAVÍTÁS: A successful_users listával vetjük össze!
+                if sub_username and sub_username not in successful_users and sub_username != payload.get('sender'):
+                    sub_info_str = sub_item.get('subscription', {}).get('S')
+                    if sub_info_str:
+                        sub_info = json.loads(sub_info_str)
+                        try:
+                            webpush(
+                                subscription_info=sub_info,
+                                data=json.dumps({
+                                    "title": f"Új üzenet: {sender_name} ({target_room})",
+                                    "body": msg_text,
+                                    "url": f"/?room={target_room}"
+                                }),
+                                vapid_private_key=VAPID_PRIVATE_KEY,
+                                vapid_claims={"sub": VAPID_CONTACT_EMAIL}
+                            )
+                            print(f"Push sikeresen kiküldve: {sub_username}")
+                        except WebPushException as ex:
+                            if ex.response and ex.response.status_code in [404, 410]:
+                                dynamodb.delete_item(TableName=SUBSCRIPTIONS_TABLE, Key={'username': {'S': sub_username}})
+        except Exception as e:
+            print(f"Általános Push hiba: {e}")
+
+def broadcast_user_list(apigw_management, target_room=None):
+    items = dynamodb.scan(TableName=CONNECTIONS_TABLE).get('Items', [])
+    users = [i['username']['S'] for i in items if 'username' in i and i['username']['S'] != 'Ismeretlen']
+    users = list(set(users)) # Duplikációk kiszűrése
+    
+    payload = json.dumps({'type': 'userList', 'users': users}).encode('utf-8')
+    
+    # Mindenkinek elküldjük a teljes listát, hogy lehessen meghívót (roomInvite) küldeni!
+    for item in items:
+        try:
+            apigw_management.post_to_connection(ConnectionId=item['connectionId']['S'], Data=payload)
+        except Exception:
+            dynamodb.delete_item(TableName=CONNECTIONS_TABLE, Key={'connectionId': item['connectionId']})

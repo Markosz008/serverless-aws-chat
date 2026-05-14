@@ -5,6 +5,8 @@ import { addMessage, updateBadge } from './ui.js';
 import { toggleMicrophone, processNextFile } from './media.js';
 import { deriveKey, setE2EState, encryptMessage, e2eEnabled } from './crypto.js';
 
+window.state = state; // GLOBÁLIS EXPORT A HTML TPL-NEK
+
 // --- Képernyőméret fix mobilokra ---
 const setAppHeight = () => { let vh = window.innerHeight; if (window.visualViewport) { vh = window.visualViewport.height; } document.documentElement.style.setProperty('--app-height', vh + 'px'); };
 window.addEventListener('resize', setAppHeight); window.addEventListener('orientationchange', setAppHeight);
@@ -13,23 +15,31 @@ setAppHeight();
 
 // --- Inicializálás és Login ---
 const savedName = localStorage.getItem('chatNickname');
-if (savedName) { 
-    state.myUsername = savedName; 
-    if (!state.myUsername.includes('|')) { 
-        state.myUsername += '|' + Math.floor(Math.random() * 1000000); 
-        localStorage.setItem('chatNickname', state.myUsername); 
+if (savedName) {
+    let username = savedName;
+    // Régi formátum: csak számokból áll a meta → konvertálás
+    const parts = savedName.split('|');
+    if (parts.length >= 2 && /^\d+$/.test(parts[1])) {
+        username = parts[0] + '|emoji:🦊';
+        localStorage.setItem('chatNickname', username);
     }
-    dom.loginScreen.style.display = 'none'; 
-    connectToChat(); 
+    state.myUsername = username;
+    dom.loginScreen.style.display = 'none';
+    connectToChat();
+    // PWA / Brave ellenőrzés auto-login után
+    setTimeout(checkAndSubscribePush, 2000);
 }
 
 dom.joinBtn.addEventListener('click', () => {
     let rawName = dom.usernameInput.value.trim() || "Anonim_" + Math.floor(Math.random() * 1000);
-    state.myUsername = rawName + '|' + Math.floor(Math.random() * 1000000); 
-    localStorage.setItem('chatNickname', state.myUsername); 
-    dom.loginScreen.style.display = 'none'; 
+    // Alapértelmezett emoji a belépéskor:
+    state.myUsername = rawName + '|emoji:🦊';
+    localStorage.setItem('chatNickname', state.myUsername);
+    dom.loginScreen.style.display = 'none';
     connectToChat();
-    setTimeout(() => { if (window.updateProfileDropdown) window.updateProfileDropdown(); }, 300);
+    setTimeout(() => { if (window.updateAllMyAvatars) window.updateAllMyAvatars(); }, 300);
+    // PWA / Brave ellenőrzés belépés gomb után
+    setTimeout(checkAndSubscribePush, 2000);
 });
 
 // --- Segédfüggvények ---
@@ -43,43 +53,55 @@ function isNameTaken(name) {
     return taken;
 }
 
-window.updateUserList = function(users) { 
-    dom.userListUl.innerHTML = ''; 
-    users.forEach(user => { 
+window.updateUserList = function(users) {
+    dom.userListUl.innerHTML = '';
+    users.forEach(user => {
         const dispName = user.split('|')[0];
-        const seed = user.split('|')[1] || user;
-
-        const li = document.createElement('li'); 
+        const av       = window.parseAvatar ? window.parseAvatar(user) : { type:'emoji', value:'🦊' };
+ 
+        const li = document.createElement('li');
+ 
         const leftGroup = document.createElement('div');
-        leftGroup.style.display = 'flex'; leftGroup.style.alignItems = 'center';
-
-        const avatar = document.createElement('img');
-        avatar.src = 'https://api.dicebear.com/7.x/adventurer/svg?seed=' + encodeURIComponent(seed);
-        avatar.style.width = '24px'; avatar.style.height = '24px'; avatar.style.borderRadius = '50%'; avatar.style.marginRight = '8px'; avatar.style.background = '#e0e0e0';
-
-        const textSpan = document.createElement('span'); textSpan.className = 'user-name';
+        leftGroup.style.cssText = 'display:flex; align-items:center; flex:1; min-width:0;';
+ 
+        // Avatar (emoji vagy foto)
+        const avWrap = document.createElement('div');
+        avWrap.style.cssText = 'width:24px;height:24px;border-radius:50%;margin-right:8px;background:var(--bg-color);display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0;overflow:hidden;';
+        if (av.type === 'photo') {
+            const img = document.createElement('img');
+            img.src = av.value; img.style.cssText = 'width:100%;height:100%;object-fit:cover;border-radius:50%;';
+            avWrap.appendChild(img);
+        } else {
+            avWrap.textContent = av.value;
+        }
+ 
+        const textSpan = document.createElement('span');
+        textSpan.className = 'user-name';
         textSpan.innerText = dispName + (user === state.myUsername ? " (Te)" : "");
-        
-        leftGroup.appendChild(avatar); leftGroup.appendChild(textSpan); li.appendChild(leftGroup);
-        
+ 
+        leftGroup.appendChild(avWrap);
+        leftGroup.appendChild(textSpan);
+        li.appendChild(leftGroup);
+ 
         if (user !== state.myUsername) {
             const callBtn = document.createElement('button');
             callBtn.className = 'call-user-btn'; callBtn.innerText = '📞';
             callBtn.onclick = () => window.startCall(user);
             li.appendChild(callBtn);
-        
+ 
+            // Meghívó gomb
             const invBtn = document.createElement('button');
-            invBtn.className = 'invite-user-btn';
-            invBtn.innerText = '📨';
-            invBtn.title     = 'Meghívás ebbe a szobába';
+            invBtn.className = 'invite-user-btn'; invBtn.innerText = '📨';
+            invBtn.title = 'Meghívás ebbe a szobába';
             invBtn.setAttribute('data-invite-target', user);
             invBtn.onclick = () => window.sendRoomInvite(user);
             li.appendChild(invBtn);
         }
-        dom.userListUl.appendChild(li); 
-    }); 
-    if (window.updateProfileDropdown) window.updateProfileDropdown();
-}
+        dom.userListUl.appendChild(li);
+    });
+    // Saját avatar frissítése
+    if (window.updateAllMyAvatars) window.updateAllMyAvatars();
+};
 
 // --- Gomb Események (Header) ---
 document.getElementById('room-btn').addEventListener('click', async () => {
@@ -165,27 +187,10 @@ document.getElementById('change-name-btn').addEventListener('click', () => {
         if (state.socket && state.socket.readyState === WebSocket.OPEN) { 
             state.socket.send(JSON.stringify({ action: 'join', username: state.myUsername, room: state.currentRoom, password: state.currentRoomPassword })); 
         }
-    if (window.updateProfileDropdown) window.updateProfileDropdown();
-    if (window.closeProfileMenu) window.closeProfileMenu();
+    if (window.updateAllMyAvatars) window.updateAllMyAvatars();
+        if (window.closeProfileMenu)   window.closeProfileMenu();
     }
 });
-
-document.getElementById('avatar-btn').addEventListener('click', () => {
-    const dispName = state.myUsername.split('|')[0];
-    const newSeed = Math.floor(Math.random() * 1000000);
-    state.myUsername = dispName + '|' + newSeed;
-    localStorage.setItem('chatNickname', state.myUsername);
-    if (state.socket && state.socket.readyState === WebSocket.OPEN) { 
-        state.socket.send(JSON.stringify({ action: 'join', username: state.myUsername, room: state.currentRoom, password: state.currentRoomPassword })); 
-    if (window.updateProfileDropdown) window.updateProfileDropdown();
-    if (window.closeProfileMenu) window.closeProfileMenu();
-    }
-});
-
-//document.getElementById('theme-toggle').addEventListener('click', () => { 
- //   const theme = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark'; 
-  //  document.documentElement.setAttribute('data-theme', theme); 
-//});
 
 // --- GLOBÁLIS FÜGGVÉNYEK A HTML GOMBOKHOZ ---
 if (!state.myReactions) state.myReactions = new Set();
@@ -301,10 +306,185 @@ document.addEventListener('click', (e) => {
     if (!e.target.closest('emoji-picker') && !e.target.closest('#emoji-btn')) document.getElementById('emoji-picker-container').style.display = 'none';
 });
 
-window.addEventListener('focus', () => { 
-    state.unreadCount = 0; updateBadge(); 
-    if (state.socket && state.socket.readyState === WebSocket.OPEN && state.unreadMsgQueue.length > 0) {
-        state.unreadMsgQueue.forEach(msg => state.socket.send(JSON.stringify({ action: 'markRead', msgId: msg.msgId, timestamp: msg.timestamp, room: state.currentRoom })));
-        state.unreadMsgQueue = [];
+// --- JAVÍTVA: Agresszív újracsatlakozás és Ghost Socket védelem ---
+// --- JAVÍTVA: Agresszív újracsatlakozás és Ghost Socket védelem ---
+function handleAppWakeUp() {
+    if (!document.hidden) {
+        state.unreadCount = 0; 
+        updateBadge(); 
+        
+        // 1. Ghost Socket (halott kapcsolat) ellenőrzése
+        if (state.socket && state.socket.readyState === WebSocket.OPEN) {
+            try { 
+                state.socket.send(JSON.stringify({ action: 'ping' })); 
+            } catch(e) { 
+                connectToChat(); 
+                return; 
+            }
+        } else if (!state.socket || state.socket.readyState !== WebSocket.OPEN) {
+            connectToChat(); 
+            return;
+        }
+
+        // 2. Várakozó olvasási jelzések kiküldése (késleltetve a tűzfal miatt)
+        if (state.unreadMsgQueue && state.unreadMsgQueue.length > 0) {
+            state.unreadMsgQueue.forEach((msg, index) => {
+                setTimeout(() => {
+                    if (state.socket && state.socket.readyState === WebSocket.OPEN) {
+                        state.socket.send(JSON.stringify({ action: 'markRead', msgId: msg.msgId, timestamp: msg.timestamp, room: state.currentRoom }));
+                    }
+                }, index * 100);
+            });
+            state.unreadMsgQueue = [];
+        }
     }
+}
+
+// Ablak események figyelése
+window.addEventListener('focus', handleAppWakeUp);
+document.addEventListener('visibilitychange', handleAppWakeUp);
+
+// BOMBABIZTOS TRÜKK: Ha a user megmozdítja az egeret, kattint, vagy gépel, 
+// a böngésző biztosan fókuszban van. Azonnal kiküldjük a beragadt pipákat!
+['mousemove', 'click', 'keydown', 'touchstart'].forEach(evt => {
+    document.addEventListener(evt, () => {
+        // Csak akkor futtatjuk, ha van beragadt olvasatlan üzenet
+        if (state.unreadMsgQueue && state.unreadMsgQueue.length > 0) {
+            handleAppWakeUp();
+        }
+    }, { passive: true });
 });
+
+
+// ═══════════════════════════════════════════════════════════════
+// WEB PUSH API & SERVICE WORKER (OFFLINE ÉRTESÍTÉSEK)
+// ═══════════════════════════════════════════════════════════════
+
+const VAPID_PUBLIC_KEY = 'BD8VoYkxZK-eg6aZ0z7vTrz0K3FFfNbQ3bwLhy3gNc6RCaakaHKYXeTpmhr5rBC53jLibEO-ahPPjVOFJ896OM0'; 
+
+function urlB64ToUint8Array(base64String) {
+    const padding = '='.repeat((4 - base64String.length % 4) % 4);
+    const base64 = (base64String + padding).replace(/\-/g, '+').replace(/_/g, '/');
+    const rawData = window.atob(base64);
+    const outputArray = new Uint8Array(rawData.length);
+    for (let i = 0; i < rawData.length; ++i) { outputArray[i] = rawData.charCodeAt(i); }
+    return outputArray;
+}
+
+if ('serviceWorker' in navigator && 'PushManager' in window) {
+    navigator.serviceWorker.register('/sw.js').then(function(swReg) {
+        console.log('Service Worker regisztrálva, Push készen áll.');
+        
+        window.subscribeToPush = function() {
+            swReg.pushManager.getSubscription().then(function(sub) {
+                if (sub === null) {
+                    swReg.pushManager.subscribe({
+                        userVisibleOnly: true,
+                        applicationServerKey: urlB64ToUint8Array(VAPID_PUBLIC_KEY)
+                    }).then(function(newSub) {
+                        sendPushSubToBackend(newSub);
+                    }).catch(function(e) { 
+                        console.log('Push nem elérhető (Brave/Asztali), belső értesítés mód aktív.');
+                        // Belső jelzés a Headerben Brave esetében
+                        const statusDot = document.getElementById('nav-notif');
+                        if (statusDot) { statusDot.style.background = '#ff9900'; statusDot.title = "Belső értesítések aktívak"; }
+                    });
+                } else {
+                    sendPushSubToBackend(sub);
+                }
+            });
+        };
+    }).catch(function(error) {
+        console.error('Service Worker regisztrációs hiba:', error);
+    });
+}
+
+function sendPushSubToBackend(subscription) {
+    if (window.state && window.state.socket && window.state.socket.readyState === WebSocket.OPEN) {
+        window.state.socket.send(JSON.stringify({
+            action: 'savePushSub',
+            username: window.state.myUsername,
+            subscription: subscription
+        }));
+        console.log("Push Token elküldve a backendnek!");
+    }
+}
+
+// --- Push feliratkozás vezérlése (Brave/PWA logika) ---
+async function checkAndSubscribePush() {
+    const isPWA = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
+    const isBrave = !!(navigator.brave && await navigator.brave.isBrave());
+
+    console.log("Környezet ellenőrzése - PWA:", isPWA, "Brave:", isBrave);
+
+    if (isPWA || !isBrave) {
+        console.log("Push regisztráció indítása...");
+        if (window.subscribeToPush) window.subscribeToPush();
+    } else {
+        console.log("Push regisztráció kihagyva (Brave asztali mód). Belső értesítések aktívak.");
+    }
+}
+
+// --- ÚJ: 3 PONTOS (Továbbiak) MENÜ ÉS VISSZAVONÁS LOGIKA ---
+window.openMessageOptions = function(e, msgId, timestamp, isMine) {
+    window.activeMsgId = msgId;
+    window.activeMsgTimestamp = timestamp;
+
+    let menu = document.getElementById('options-menu');
+    if (!menu) {
+        menu = document.createElement('div');
+        menu.id = 'options-menu';
+        // A Messenger-szerű lebegő menü stílusa
+        menu.style.cssText = 'position:fixed; background:var(--bg-color, #2a2d31); border:1px solid #4facfe; border-radius:8px; padding:5px 0; display:none; z-index:9999; flex-direction:column; box-shadow:0 4px 15px rgba(0,0,0,0.5); min-width:180px;';
+        document.body.appendChild(menu);
+        
+        // Ha bárhova máshova kattintunk, záródjon be
+        document.addEventListener('click', (ev) => {
+            if (!ev.target.closest('#options-menu') && !ev.target.classList.contains('options-btn')) {
+                menu.style.display = 'none';
+            }
+        });
+    }
+
+    menu.innerHTML = ''; // Kiürítjük a korábbi gombokat
+
+    if (isMine) {
+        const delBtn = document.createElement('button');
+        delBtn.innerHTML = '🗑️ Visszavonás mindkét félnél';
+        delBtn.style.cssText = 'background:none; border:none; color:#ff4d4d; padding:10px 15px; cursor:pointer; text-align:left; font-size:14px; width:100%;';
+        delBtn.onmouseover = () => delBtn.style.background = 'rgba(255, 77, 77, 0.1)';
+        delBtn.onmouseout = () => delBtn.style.background = 'transparent';
+        
+        delBtn.onclick = () => {
+            if (confirm('Biztosan visszavonod ezt az üzenetet mindkét félnél? A művelet nem vonható vissza!')) {
+                if (state.socket && state.socket.readyState === WebSocket.OPEN) {
+                    state.socket.send(JSON.stringify({
+                        action: 'deleteMessage',
+                        msgId: window.activeMsgId,
+                        timestamp: window.activeMsgTimestamp,
+                        room: state.currentRoom,
+                        username: state.myUsername
+                    }));
+                }
+                menu.style.display = 'none';
+            }
+        };
+        menu.appendChild(delBtn);
+        
+        // Előkészítjük a jövőbeli funkciót
+        const editBtn = document.createElement('button');
+        editBtn.innerHTML = '✏️ Módosítás (Hamarosan)';
+        editBtn.style.cssText = 'background:none; border:none; color:#888; padding:10px 15px; cursor:not-allowed; text-align:left; font-size:14px; width:100%; border-top:1px solid #4facfe;';
+        menu.appendChild(editBtn);
+
+    } else {
+        menu.innerHTML = '<div style="padding:10px 15px; color:#888; font-size:14px;">Nincs elérhető opció</div>';
+    }
+
+    menu.style.display = 'flex';
+    
+    // Pozicionálás az ikon mellé
+    const rect = e.target.getBoundingClientRect();
+    menu.style.left = Math.min(rect.left, window.innerWidth - 190) + 'px';
+    menu.style.top = (rect.top + 25) + 'px';
+};

@@ -31,14 +31,23 @@ export function connectToChat() {
     clearTimeout(state.reconnectTimer); 
     state.socket = new WebSocket(state.WSS_URL);
     
+    // ÚJ: Memória a "beelőző" kék pipáknak
+    if (!state.knownReadMessages) state.knownReadMessages = new Set(); 
+
     state.socket.onopen = () => {
         state.socket.send(JSON.stringify({ action: 'join', username: state.myUsername, room: state.currentRoom, password: state.currentRoomPassword }));
         [dom.messageInput, dom.sendBtn, dom.cameraBtn, dom.uploadBtn, dom.micBtn, dom.gameBtn, dom.emojiBtn].forEach(el => el.disabled = false); 
         dom.sendBtn.innerText = "Küldés"; dom.messageInput.placeholder = "Üzenet...";
         renderSavedRooms();
         
-        if (document.visibilityState === 'visible' && state.unreadMsgQueue.length > 0) {
-            state.unreadMsgQueue.forEach(msg => state.socket.send(JSON.stringify({ action: 'markRead', msgId: msg.msgId, timestamp: msg.timestamp, room: state.currentRoom })));
+        if ((document.visibilityState === 'visible' || document.hasFocus()) && state.unreadMsgQueue && state.unreadMsgQueue.length > 0) {
+            state.unreadMsgQueue.forEach((msg, index) => {
+                setTimeout(() => {
+                    if (state.socket && state.socket.readyState === WebSocket.OPEN) {
+                        state.socket.send(JSON.stringify({ action: 'markRead', msgId: msg.msgId, timestamp: msg.timestamp, room: state.currentRoom }));
+                    }
+                }, index * 150);
+            });
             state.unreadMsgQueue = [];
         }
     };
@@ -53,6 +62,7 @@ export function connectToChat() {
 
     state.socket.onmessage = async (event) => {
         const data = JSON.parse(event.data);
+        
         if (data.type === 'error') { alert(data.message); }
         else if (data.type === 'roomJoined') {
             state.currentRoom = data.room; dom.messagesDiv.innerHTML = ''; window.cancelReply();
@@ -61,16 +71,19 @@ export function connectToChat() {
             renderSavedRooms();
         }
         else if (data.uploadUrl && state.currentFileToUpload) {
-            window.performUpload(data.uploadUrl, data.fileUrl); // media.js-ből jön
+            window.performUpload(data.uploadUrl, data.fileUrl);
         }
         else if (data.type === 'userList') {
-            window.updateUserList(data.users); // app.js-ben lesz definiálva
+            window.updateUserList(data.users);
         }
         else if (data.type === 'reaction') {
             updateReactionUI(data.msgId, data.emoji, data.isAdd);
         }
         else if (data.type === 'roomInvite') {
-        if (window.showRoomInvite) window.showRoomInvite(data.sender, data.room);
+            if (window.showRoomInvite) window.showRoomInvite(data.sender, data.room, data.password);
+        }
+        else if (data.avatarUploadUrl && window._pendingAvatarUpload) {
+            window._pendingAvatarUpload.resolve({ uploadUrl: data.avatarUploadUrl, fileUrl: data.avatarFileUrl });
         }
         else if (data.type === 'typing') {
             if (data.sender !== state.myUsername) {
@@ -79,11 +92,46 @@ export function connectToChat() {
             }
         }
         else if (data.type === 'msgRead') {
+            // JAVÍTÁS 1: Bejegyezzük a memóriába, hogy jött rá egy pipa!
+            if (!state.knownReadMessages) state.knownReadMessages = new Set();
+            state.knownReadMessages.add(data.msgId);
+
             const statEl = document.getElementById('status-' + data.msgId);
-            if (statEl) { statEl.innerText = '✓✓'; statEl.style.color = '#4facfe'; }
+            if (statEl) { 
+                statEl.innerText = '✓✓'; statEl.style.color = '#4facfe'; 
+            } else {
+                // Ha még nincs a képernyőn (mert épp dekódol a processzor), adunk neki fél másodperc esélyt!
+                setTimeout(() => {
+                    const retryEl = document.getElementById('status-' + data.msgId);
+                    if (retryEl) { retryEl.innerText = '✓✓'; retryEl.style.color = '#4facfe'; }
+                }, 500);
+            }
+        }
+        else if (data.type === 'deleteMessage') {
+            const wrap = document.getElementById('wrap-' + data.msgId);
+            if (wrap) {
+                // JAVÍTÁS: A doboz osztálya .message (nem .msg-bubble)
+                const bubble = wrap.querySelector('.message');
+                if (bubble) {
+                    // Felülírjuk a tartalmat, ami egyben kidobja a benne lévő gombokat is!
+                    bubble.innerHTML = '<div style="padding: 5px;">🚫 <i>Az üzenetet visszavonták.</i></div>';
+                    bubble.style.background = 'transparent';
+                    bubble.style.border = '1px dashed #666';
+                    bubble.style.color = '#888';
+                    bubble.style.boxShadow = 'none';
+                }
+                
+                // Eltüntetjük a meglévő reakciókat is (amik a buborék alatt/mellett vannak)
+                const reactions = wrap.querySelector('.reaction-container');
+                if (reactions) reactions.remove();
+                
+                // Eltüntetjük a pipákat is, ha ott lennének
+                const statusIcon = document.getElementById('status-' + data.msgId);
+                if (statusIcon && statusIcon.parentNode) statusIcon.parentNode.remove();
+            }
         }
         else if (data.type === 'webrtcSignal' && data.sender !== state.myUsername) {
-            window.handleWebRTCSignal(data.signal, data.sender); // media.js-ből jön
+            window.handleWebRTCSignal(data.signal, data.sender);
         }
         else if (data.message && data.sender) { 
             const isMine = checkIfMine(data.sender, data.deviceId); 
@@ -92,14 +140,29 @@ export function connectToChat() {
                 if (pendingWrap) pendingWrap.remove();
             }
 
+            // A lassan lefutó aszinkron dekódolás (itt előzött be a pipa!)
             const decryptedMsg = await decryptMessage(data.message);
-            // --- ÚJ: Hozzáadva az audioUrl a hívás végéhez (11. paraméter) ---
-            addMessage(decryptedMsg, false, data.sender, isMine, data.msgId, data.replyTo, data.linkPreview, 'sent', data.timestamp, null, data.audioUrl); 
+            
+            // JAVÍTÁS 2: Megkérdezzük a memóriát, hogy a dekódolás ALATT érkezett-e már kék pipa parancs!
+            let currentStatus = 'sent';
+            if (state.knownReadMessages && state.knownReadMessages.has(data.msgId)) {
+                currentStatus = 'read';
+            }
+
+            addMessage(decryptedMsg, false, data.sender, isMine, data.msgId, data.replyTo, data.linkPreview, currentStatus, data.timestamp, null, data.audioUrl); 
             
             if (!isMine) {
-                if (document.visibilityState === 'visible') {
-                    state.socket.send(JSON.stringify({ action: 'markRead', msgId: data.msgId, timestamp: data.timestamp, room: state.currentRoom }));
+                if (!document.hidden) {
+                    if (state.socket && state.socket.readyState === WebSocket.OPEN) {
+                        state.socket.send(JSON.stringify({ 
+                            action: 'markRead', 
+                            msgId: data.msgId, 
+                            timestamp: data.timestamp, 
+                            room: state.currentRoom 
+                        }));
+                    }
                 } else {
+                    if (!state.unreadMsgQueue) state.unreadMsgQueue = [];
                     state.unreadMsgQueue.push({ msgId: data.msgId, timestamp: data.timestamp });
                     state.unreadCount++;
                     updateBadge();
@@ -108,16 +171,46 @@ export function connectToChat() {
         }
         else if (data.type === 'history') { 
             dom.messagesDiv.innerHTML = ''; 
+            let delay = 0; 
             
-            // for...of ciklus kell az aszinkron decrypt miatt!
             for (const msg of data.messages) {
                 const isMine = checkIfMine(msg.sender, msg.deviceId); 
                 const status = msg.isRead ? 'read' : 'sent'; 
                 
-                const decryptedMsg = await decryptMessage(msg.message);
-                
-                // --- ÚJ: Hozzáadva a msg.audioUrl a hívás végéhez (11. paraméter) ---
-                addMessage(decryptedMsg, false, msg.sender, isMine, msg.msgId, msg.replyTo, msg.linkPreview, status, msg.timestamp, msg.reactions, msg.audioUrl); 
+                // JAVÍTÁS: Ha logikailag törölt üzenetet kapunk az előzményekben
+                if (msg.message === 'DELETED_MSG') {
+                    // Üres üzenetként letesszük a DOM-ba
+                    addMessage('', false, msg.sender, isMine, msg.msgId, null, null, status, msg.timestamp, null, null);
+                    
+                    // Azonnal rátesszük a visszavont designt
+                    const wrap = document.getElementById('wrap-' + msg.msgId);
+                    if (wrap) {
+                        const bubble = wrap.querySelector('.message');
+                        if (bubble) {
+                            bubble.innerHTML = '<div style="padding: 5px;">🚫 <i>Az üzenetet visszavonták.</i></div>';
+                            bubble.style.background = 'transparent';
+                            bubble.style.border = '1px dashed #666';
+                            bubble.style.color = '#888';
+                            bubble.style.boxShadow = 'none';
+                        }
+                        const optionsBtn = wrap.querySelector('.desktop-options-btn');
+                        if (optionsBtn) optionsBtn.remove();
+                    }
+                } 
+                // Ha normál üzenet, akkor megy a szokásos dekódolás
+                else {
+                    const decryptedMsg = await decryptMessage(msg.message);
+                    addMessage(decryptedMsg, false, msg.sender, isMine, msg.msgId, msg.replyTo, msg.linkPreview, status, msg.timestamp, msg.reactions, msg.audioUrl); 
+                    
+                    if (!isMine && !msg.isRead) {
+                        delay += 150; 
+                        setTimeout(() => {
+                            if (state.socket && state.socket.readyState === WebSocket.OPEN) {
+                                state.socket.send(JSON.stringify({ action: 'markRead', msgId: msg.msgId, timestamp: msg.timestamp, room: state.currentRoom }));
+                            }
+                        }, delay);
+                    }
+                }
             }
             scrollToBottom(); 
         }
