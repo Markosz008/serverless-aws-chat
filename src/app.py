@@ -520,29 +520,28 @@ def lambda_handler(event, context):
         return {'statusCode': 200}
     return {'statusCode': 400}
 
-# --- ÚJ: A Broadcast függvény felokosítása a Web Push-hoz ---
-# --- ÚJ: A Broadcast függvény felokosítása a Web Push-hoz ---
 def broadcast(apigw_management, payload, target_room):
     # 1. Lekérjük a kapcsolatokat az adatbázisból
     online_connections = dynamodb.scan(TableName=CONNECTIONS_TABLE).get('Items', [])
-    successful_users = set() # ÚJ: Csak a BIZONYÍTOTTAN online usereket gyűjtjük
+    successful_base_users = set() # ÚJ: Csak a neveket tároljuk avatar nélkül!
 
     for item in online_connections:
         if item.get('room', {}).get('S', 'main') == target_room:
-            username = item.get('username', {}).get('S')
+            username_full = item.get('username', {}).get('S')
             try: 
                 # Megpróbáljuk elküldeni az üzenetet WebSocketen
                 apigw_management.post_to_connection(ConnectionId=item['connectionId']['S'], Data=json.dumps(payload).encode('utf-8'))
-                if username:
-                    successful_users.add(username) # Ha nem halt el, akkor TÉNYLEG online!
+                if username_full:
+                    # Levágjuk az avatart, csak a tiszta nevet mentjük el az online listába
+                    successful_base_users.add(username_full.split('|')[0]) 
             except: 
                 # Ha elhalt, töröljük a "szellem" kapcsolatot
                 dynamodb.delete_item(TableName=CONNECTIONS_TABLE, Key={'connectionId': item['connectionId']})
 
-    # 2. Push kiküldése (a szellem-kapcsolatokat így már kiszűrjük)
     if payload.get('type') == 'chat' and VAPID_PRIVATE_KEY:
         try:
-            sender_name = payload.get('sender', '').split('|')[0]
+            sender_full = payload.get('sender', '')
+            sender_base = sender_full.split('|')[0] # Csak a tiszta név, avatar nélkül
             msg_text = payload.get('message', '')
             
             if msg_text.startswith('U2FsdGVkX1'):
@@ -552,29 +551,38 @@ def broadcast(apigw_management, payload, target_room):
             
             subscriptions = dynamodb.scan(TableName=SUBSCRIPTIONS_TABLE).get('Items', [])
             
+            # --- ÚJ: Dedikált lista az egyedi eszközök (endpointok) követésére ---
+            pushed_endpoints = set() 
+            
             for sub_item in subscriptions:
-                sub_username = sub_item.get('username', {}).get('S')
+                sub_username_full = sub_item.get('username', {}).get('S', '')
+                sub_base = sub_username_full.split('|')[0] 
                 
-                # JAVÍTÁS: A successful_users listával vetjük össze!
-                if sub_username and sub_username not in successful_users and sub_username != payload.get('sender'):
+                if sub_base and sub_base not in successful_base_users and sub_base != sender_base:
                     sub_info_str = sub_item.get('subscription', {}).get('S')
                     if sub_info_str:
                         sub_info = json.loads(sub_info_str)
-                        try:
-                            webpush(
-                                subscription_info=sub_info,
-                                data=json.dumps({
-                                    "title": f"Új üzenet: {sender_name} ({target_room})",
-                                    "body": msg_text,
-                                    "url": f"/?room={target_room}"
-                                }),
-                                vapid_private_key=VAPID_PRIVATE_KEY,
-                                vapid_claims={"sub": VAPID_CONTACT_EMAIL}
-                            )
-                            print(f"Push sikeresen kiküldve: {sub_username}")
-                        except WebPushException as ex:
-                            if ex.response and ex.response.status_code in [404, 410]:
-                                dynamodb.delete_item(TableName=SUBSCRIPTIONS_TABLE, Key={'username': {'S': sub_username}})
+                        endpoint = sub_info.get('endpoint') # Ez a konkrét eszköz azonosítója
+                        
+                        # --- ÚJ: Csak akkor küldjük, ha erre az eszközre még NEM küldtük ki! ---
+                        if endpoint and endpoint not in pushed_endpoints:
+                            try:
+                                webpush(
+                                    subscription_info=sub_info,
+                                    data=json.dumps({
+                                        "title": f"Új üzenet: {sender_base} ({target_room})",
+                                        "body": msg_text,
+                                        "url": f"/?room={target_room}"
+                                    }),
+                                    vapid_private_key=VAPID_PRIVATE_KEY,
+                                    vapid_claims={"sub": VAPID_CONTACT_EMAIL}
+                                )
+                                # Ha sikeres, felírjuk a listára, hogy ide már nem küldünk többet
+                                pushed_endpoints.add(endpoint) 
+                                print(f"Push sikeresen kiküldve: {sub_base}")
+                            except WebPushException as ex:
+                                if ex.response and ex.response.status_code in [404, 410]:
+                                    dynamodb.delete_item(TableName=SUBSCRIPTIONS_TABLE, Key={'username': {'S': sub_username_full}})
         except Exception as e:
             print(f"Általános Push hiba: {e}")
 
