@@ -253,16 +253,44 @@ window.cancelReply = function() { state.replyingTo = null; document.getElementBy
 async function sendMessage() {
     const rawText = dom.messageInput.value.trim();
     if (rawText) {
-        const tempId = 'temp-' + Date.now();
-        addMessage(rawText, false, state.myUsername, true, tempId, state.replyingTo, null, 'pending', Date.now());
+        // A titkosítás mindkét esetben kell
         const textToSend = await encryptMessage(rawText);
 
-        if (state.socket && state.socket.readyState === WebSocket.OPEN) {
-            const payload = { action: 'sendMessage', message: textToSend, username: state.myUsername, deviceId: state.myDeviceId, room: state.currentRoom, tempId: tempId, isSecretMode: e2eEnabled };
-            if (state.replyingTo) { payload.replyTo = { sender: state.replyingTo.sender, message: state.replyingTo.message }; }
-            state.socket.send(JSON.stringify(payload)); 
+        if (window.state.editingMsgId) {
+            // --- SZERKESZTÉS MÓD ---
+            if (state.socket && state.socket.readyState === WebSocket.OPEN) {
+                state.socket.send(JSON.stringify({ 
+                    action: 'editMessage', 
+                    msgId: window.state.editingMsgId, 
+                    timestamp: window.state.editingMsgTimestamp,
+                    room: state.currentRoom, 
+                    username: state.myUsername,
+                    newMessage: textToSend 
+                }));
+            }
+            
+            // UI visszaállítása normál állapotra
+            window.state.editingMsgId = null;
+            window.state.editingMsgTimestamp = null;
+            dom.sendBtn.innerText = 'Küldés';
+            dom.sendBtn.style.background = '#ff9900'; // Vissza az eredeti narancssárgára
+            
+        } else {
+            // --- NORMÁL KÜLDÉS MÓD (A te eredeti kódod) ---
+            const tempId = 'temp-' + Date.now();
+            addMessage(rawText, false, state.myUsername, true, tempId, state.replyingTo, null, 'pending', Date.now());
+
+            if (state.socket && state.socket.readyState === WebSocket.OPEN) {
+                const payload = { action: 'sendMessage', message: textToSend, username: state.myUsername, deviceId: state.myDeviceId, room: state.currentRoom, tempId: tempId, isSecretMode: e2eEnabled };
+                if (state.replyingTo) { payload.replyTo = { sender: state.replyingTo.sender, message: state.replyingTo.message }; }
+                state.socket.send(JSON.stringify(payload)); 
+            }
         }
-        dom.messageInput.value = ''; window.cancelReply(); state.isTyping = false;
+
+        // Mindkét esetben ürítjük a beviteli mezőt és lezárjuk a gépelést
+        dom.messageInput.value = ''; 
+        window.cancelReply(); 
+        state.isTyping = false;
     }
 }
 
@@ -473,8 +501,42 @@ window.openMessageOptions = function(e, msgId, timestamp, isMine) {
         
         // Előkészítjük a jövőbeli funkciót
         const editBtn = document.createElement('button');
-        editBtn.innerHTML = '✏️ Módosítás (Hamarosan)';
-        editBtn.style.cssText = 'background:none; border:none; color:#888; padding:10px 15px; cursor:not-allowed; text-align:left; font-size:14px; width:100%; border-top:1px solid #4facfe;';
+        editBtn.innerHTML = '✏️ Módosítás';
+        editBtn.style.cssText = 'background:none; border:none; color:#4facfe; padding:10px 15px; cursor:pointer; text-align:left; font-size:14px; width:100%; border-top:1px solid rgba(255,255,255,0.1);';
+        editBtn.onmouseover = () => editBtn.style.background = 'rgba(79, 172, 254, 0.1)';
+        editBtn.onmouseout = () => editBtn.style.background = 'transparent';
+        
+        editBtn.onclick = () => {
+            const wrap = document.getElementById('wrap-' + window.activeMsgId);
+            let oldText = "";
+            if (wrap) {
+                const bubble = wrap.querySelector('.message');
+                // Megkeressük az eredeti, nyers szöveget a buborékban
+                for (let i = 0; i < bubble.childNodes.length; i++) {
+                    if (bubble.childNodes[i].nodeType === Node.TEXT_NODE && bubble.childNodes[i].nodeValue.trim() !== '') {
+                        oldText = bubble.childNodes[i].nodeValue;
+                        break;
+                    }
+                }
+            }
+            
+            // 1. Visszatesszük a szöveget az inputba
+            const inputField = document.getElementById('message-input');
+            inputField.value = oldText;
+            inputField.focus();
+            
+            // 2. Beállítjuk a szerkesztési állapotot
+            window.state.editingMsgId = window.activeMsgId;
+            window.state.editingMsgTimestamp = window.activeMsgTimestamp;
+            
+            // 3. A "Küldés" gombot átalakítjuk "Mentés" gombbá
+            const sBtn = document.getElementById('send-btn');
+            sBtn.innerText = '💾 Mentés';
+            sBtn.style.background = '#4facfe'; // Kékre vált, hogy egyértelmű legyen
+            
+            // 4. Bezárjuk a felugró menüt
+            menu.style.display = 'none';
+        };
         menu.appendChild(editBtn);
 
     } else {

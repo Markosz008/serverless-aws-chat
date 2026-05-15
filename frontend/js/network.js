@@ -29,6 +29,14 @@ export function renderSavedRooms() {
 
 export function connectToChat() {
     clearTimeout(state.reconnectTimer); 
+    
+    // --- EZ A JAVÍTÁS A DUPLIKÁCIÓK ELLEN ---
+    if (state.socket) {
+        state.socket.onclose = null; // Ne próbáljon automatikusan visszacsatlakozni a régi
+        state.socket.close();        // Lőjük ki a szellem-kapcsolatot
+    }
+    // ----------------------------------------
+
     state.socket = new WebSocket(state.WSS_URL);
     
     // ÚJ: Memória a "beelőző" kék pipáknak
@@ -128,6 +136,30 @@ export function connectToChat() {
                 // Eltüntetjük a pipákat is, ha ott lennének
                 const statusIcon = document.getElementById('status-' + data.msgId);
                 if (statusIcon && statusIcon.parentNode) statusIcon.parentNode.remove();
+            }
+        }
+        else if (data.type === 'editMessage') {
+            const wrap = document.getElementById('wrap-' + data.msgId);
+            if (wrap) {
+                const bubble = wrap.querySelector('.message');
+                if (bubble) {
+                    // Mivel a szöveg titkosítva utazik, előbb dekódoljuk
+                    const decryptedMsg = await decryptMessage(data.newMessage);
+                    
+                    // Megkeressük a nyers szöveget a buborékban (TextNode) és kicseréljük
+                    for (let i = 0; i < bubble.childNodes.length; i++) {
+                        let node = bubble.childNodes[i];
+                        if (node.nodeType === Node.TEXT_NODE && node.nodeValue.trim() !== '') {
+                            node.nodeValue = decryptedMsg;
+                            break;
+                        }
+                    }
+                    
+                    // Ha még nincs rajta (szerkesztve) címke, hozzáadjuk
+                    if (!bubble.querySelector('.edited-tag')) {
+                        bubble.insertAdjacentHTML('beforeend', '<span class="edited-tag" style="font-size: 10px; opacity: 0.6; margin-left: 8px; font-style: italic;">(szerkesztve)</span>');
+                    }
+                }
             }
         }
         else if (data.type === 'webrtcSignal' && data.sender !== state.myUsername) {

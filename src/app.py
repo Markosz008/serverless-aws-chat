@@ -400,6 +400,38 @@ def lambda_handler(event, context):
                 except Exception as e:
                     print(f"[ERROR] DynamoDB törlési hiba: {str(e)}")
 
+        elif action == 'editMessage':
+            msg_id = body.get('msgId')
+            ts = body.get('timestamp')
+            room = body.get('room', 'main')
+            sender = body.get('username')
+            new_message = body.get('newMessage')
+            
+            print(f"[DEBUG] Módosítás kérés: msgId={msg_id}")
+            if msg_id and ts and sender and new_message:
+                try:
+                    item_resp = dynamodb.get_item(TableName=MESSAGES_TABLE, Key={'room': {'S': room}, 'timestamp': {'N': str(ts)}})
+                    item = item_resp.get('Item')
+                    
+                    if item:
+                        db_sender = item.get('sender', {}).get('S', '')
+                        # Csak a saját üzenetét módosíthatja
+                        if db_sender.split('|')[0] == sender.split('|')[0]:
+                            dynamodb.update_item(
+                                TableName=MESSAGES_TABLE, 
+                                Key={'room': {'S': room}, 'timestamp': {'N': str(ts)}},
+                                UpdateExpression="SET message = :m, isEdited = :e",
+                                ExpressionAttributeValues={':m': {'S': new_message}, ':e': {'BOOL': True}}
+                            )
+                            print("[DEBUG] Üzenet sikeresen módosítva.")
+                            
+                            if apigw_management:
+                                broadcast(apigw_management, {'type': 'editMessage', 'msgId': msg_id, 'newMessage': new_message}, room)
+                        else:
+                            print(f"[WARNING] Módosítás elutasítva: {db_sender} nem egyenlő {sender}")
+                except Exception as e:
+                    print(f"[ERROR] DynamoDB módosítási hiba: {str(e)}")
+
         elif action == 'typing':
             if apigw_management: broadcast(apigw_management, {'type': 'typing', 'sender': body.get('username'), 'typing': body.get('typing')}, body.get('room', 'main'))
 

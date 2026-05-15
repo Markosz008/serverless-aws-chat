@@ -160,7 +160,7 @@ audio { max-width: 220px; height: 40px; margin-top: 5px; outline: none; }
   body.keyboard-open .input-area { padding-bottom: 5px !important; }
 }
 
-.header-btn { font-size: 12px; padding: 5px 10px; border-radius: 15px; border: 1px solid #ff9900; background: transparent; color: #ff9900; cursor: pointer; margin-left: 5px; }
+.header-btn { font-size: 12px; padding: 5px 10px; border-radius: 15px; border: 1px solid #ff9900; background: transparent; color: #ff9900; cursor: pointer !important; margin-left: 5px; position: relative; z-index: 999999; pointer-events: auto !important; transform: translateZ(0); -webkit-transform: translateZ(0); }
 #reply-preview { display: none; padding: 10px 15px; background: var(--bg-color); border-top: 1px solid var(--border-color); font-size: 13px; position: relative; border-left: 4px solid #ff9900; }
 #reply-preview-close { position: absolute; right: 15px; top: 50%; transform: translateY(-50%); cursor: pointer; font-weight: bold; font-size: 22px; color: var(--system-text); }
 #reply-preview-sender { font-weight: bold; margin-bottom: 3px; color: var(--text-color); }
@@ -259,7 +259,7 @@ audio { max-width: 220px; height: 40px; margin-top: 5px; outline: none; }
 #header {
   /* felülírjuk az inline style flex-wrap-et — nem wrap, hanem nowrap */
   flex-wrap: nowrap !important;
-  overflow: hidden;
+  overflow: visible !important; /* JAVÍTVA: Hogy ne vágja le a gombok kattintási felületét */
 }
 #header-left {
   display: flex;
@@ -274,6 +274,9 @@ audio { max-width: 220px; height: 40px; margin-top: 5px; outline: none; }
   align-items: center;
   flex-shrink: 0;  /* NE zsugorodjon */
   margin-left: auto;
+  position: relative;
+  z-index: 999999; /* JAVÍTVA: Extrém magas prioritás az asztali nézet miatt */
+  pointer-events: auto;
 }
 /* Header avatar buborék (emoji + foto egységes keret) */
 #header-avatar-wrap {
