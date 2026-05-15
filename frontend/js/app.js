@@ -55,7 +55,23 @@ function isNameTaken(name) {
 
 window.updateUserList = function(users) {
     dom.userListUl.innerHTML = '';
-    users.forEach(user => {
+    
+    // --- ÚJ RÉSZ: Duplikációk kiszűrése a megjelenítés előtt ---
+    const uniqueUsersMap = new Map();
+    
+    users.forEach(userString => {
+        const usernamePart = userString.split('|')[0];
+        // Csak akkor mentjük el, ha még nem láttuk ezt a nevet, VAGY ha ez az aktuális eszköz
+        if (!uniqueUsersMap.has(usernamePart) || userString === state.myUsername) {
+            uniqueUsersMap.set(usernamePart, userString);
+        }
+    });
+
+    const uniqueUsersArray = Array.from(uniqueUsersMap.values());
+    // --- ÚJ RÉSZ VÉGE ---
+
+    // Az eredeti kirajzoló logika, de már a szűrt listán (uniqueUsersArray) megy végig
+    uniqueUsersArray.forEach(user => {
         const dispName = user.split('|')[0];
         const av       = window.parseAvatar ? window.parseAvatar(user) : { type:'emoji', value:'🦊' };
  
@@ -335,7 +351,6 @@ document.addEventListener('click', (e) => {
 });
 
 // --- JAVÍTVA: Agresszív újracsatlakozás és Ghost Socket védelem ---
-// --- JAVÍTVA: Agresszív újracsatlakozás és Ghost Socket védelem ---
 function handleAppWakeUp() {
     if (!document.hidden) {
         state.unreadCount = 0; 
@@ -368,12 +383,32 @@ function handleAppWakeUp() {
     }
 }
 
-// Ablak események figyelése
-window.addEventListener('focus', handleAppWakeUp);
-document.addEventListener('visibilitychange', handleAppWakeUp);
+// --- ÚJ ÉS JAVÍTOTT ESEMÉNYFIGYELŐK (EVENT LISTENERS) ---
 
-// BOMBABIZTOS TRÜKK: Ha a user megmozdítja az egeret, kattint, vagy gépel, 
-// a böngésző biztosan fókuszban van. Azonnal kiküldjük a beragadt pipákat!
+// 1. Ha az asztali böngésző vagy az ablak visszakapja a fókuszt
+window.addEventListener('focus', handleAppWakeUp);
+
+// 2. Kombinált Visibility Change: Lekezeli a háttérbe rakást ÉS a visszatérést is
+document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) {
+        // App visszatért a fókuszba -> Ébresztés
+        handleAppWakeUp();
+    } else {
+        // App háttérbe került (pl. iOS swipe up) -> Azonnali, szabályos bontás
+        if (state.socket && state.socket.readyState === WebSocket.OPEN) {
+            state.socket.close(1000, "App backgrounded");
+        }
+    }
+});
+
+// 3. Extra védelem: Ha a felhasználó konkrétan bezárja a böngészőlapot/appot
+window.addEventListener('pagehide', () => {
+    if (state.socket && state.socket.readyState === WebSocket.OPEN) {
+        state.socket.close(1000, "App closed");
+    }
+});
+
+// 4. BOMBABIZTOS TRÜKK: Beragadt olvasási pipák kiküldése egérmozgásra/érintésre
 ['mousemove', 'click', 'keydown', 'touchstart'].forEach(evt => {
     document.addEventListener(evt, () => {
         // Csak akkor futtatjuk, ha van beragadt olvasatlan üzenet

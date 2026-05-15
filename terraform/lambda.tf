@@ -2,6 +2,12 @@
 data "aws_region" "current" {}
 data "aws_caller_identity" "current" {}
 
+# --- ÚJ: Beolvassuk a titkosított VAPID kulcsot az AWS SSM Parameter Store-ból ---
+data "aws_ssm_parameter" "vapid_private_key" {
+  name            = "/chat/prod/vapid_private_key"
+  with_decryption = true
+}
+
 # 1. Automatikusan becsomagoljuk a Python kódunkat egy ZIP fájlba
 data "archive_file" "lambda_zip" {
   type        = "zip"
@@ -67,7 +73,6 @@ resource "aws_iam_role_policy" "lambda_policy" {
           aws_dynamodb_table.websocket_connections.arn,
           aws_dynamodb_table.messages_table.arn,
           aws_dynamodb_table.rooms_table.arn,
-          # ÚJ: Push subscriptions tábla jogosultság
           aws_dynamodb_table.push_subscriptions.arn
         ]
       },
@@ -82,7 +87,6 @@ resource "aws_iam_role_policy" "lambda_policy" {
         Resource = [
           "${aws_s3_bucket.chat_images.arn}",
           "${aws_s3_bucket.chat_images.arn}/*",
-          # ÚJ: Avatar bucket jogosultságok
           "${aws_s3_bucket.avatar_bucket.arn}",
           "${aws_s3_bucket.avatar_bucket.arn}/*"
         ]
@@ -100,9 +104,11 @@ resource "aws_lambda_function" "websocket_handler" {
   source_code_hash = data.archive_file.lambda_zip.output_base64sha256
   runtime          = "python3.12"
 
-  timeout = 30
+  timeout     = 30
+  
+  # --- ÚJ: Memória megemelése 512MB-ra a gyorsabb betöltéshez ---
+  memory_size = 512
 
-  # ÚJ: Csatoljuk a pywebpush Layert a Lambdához
   layers = [aws_lambda_layer_version.webpush_layer.arn]
 
   environment {
@@ -112,11 +118,11 @@ resource "aws_lambda_function" "websocket_handler" {
       ROOMS_TABLE         = aws_dynamodb_table.rooms_table.name
       IMAGE_BUCKET        = aws_s3_bucket.chat_images.id
       AVATAR_BUCKET       = aws_s3_bucket.avatar_bucket.id
-      
-      # ÚJ: Változók a Web Push értesítésekhez
       SUBSCRIPTIONS_TABLE = aws_dynamodb_table.push_subscriptions.name
-      VAPID_PRIVATE_KEY   = "ErIoQxdOQZKWcJo-hNaNh39BbqS4x3nK022EpBSjPXc"
-      VAPID_CONTACT_EMAIL = "mailto:admin@sajat-domained.hu" # Ez kötelező a push szerverek felé
+      
+      # --- ÚJ: Biztonságos hivatkozás a Parameter Store-ra ---
+      VAPID_PRIVATE_KEY   = data.aws_ssm_parameter.vapid_private_key.value
+      VAPID_CONTACT_EMAIL = "mailto:admin@sajat-domained.hu" 
     }
   }
 }

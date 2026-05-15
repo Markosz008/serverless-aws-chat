@@ -2,7 +2,7 @@
 
 resource "aws_dynamodb_table" "websocket_connections" {
   name         = "websocket-connections"
-  billing_mode = "PAY_PER_REQUEST" # Nem foglalunk le kapacitást előre, csak a kérésekért fizetünk (ingyenes tierbe bőven belefér)
+  billing_mode = "PAY_PER_REQUEST" # Nem foglalunk le kapacitást előre, csak a kérésekért fizetünk
   hash_key     = "connectionId"    # Ez lesz a tábla elsődleges kulcsa
 
   attribute {
@@ -13,6 +13,8 @@ resource "aws_dynamodb_table" "websocket_connections" {
   tags = {
     Name = "Serverless-WebSocket-Table"
   }
+  
+  # IDE NEM KELL VÉDELEM: Az élő WebSocket kapcsolatok amúgy is elszakadnak egy destroy esetén.
 }
 
 resource "aws_dynamodb_table" "messages_table" {
@@ -39,7 +41,13 @@ resource "aws_dynamodb_table" "messages_table" {
     attribute_name = "expiresAt"
     enabled        = true
   }
+
+  # ÚJ: Adatvédelem a véletlen destroy ellen (A korábbi üzenetek megmaradnak)
+  lifecycle {
+    prevent_destroy = true
+  }
 }
+
 resource "aws_dynamodb_table" "push_subscriptions" {
   name         = "chat-push-subscriptions"
   billing_mode = "PAY_PER_REQUEST"
@@ -49,7 +57,13 @@ resource "aws_dynamodb_table" "push_subscriptions" {
     name = "username"
     type = "S"
   }
+
+  # ÚJ: Adatvédelem a véletlen destroy ellen (A felhasználók offline tokenjei nem vesznek el)
+  lifecycle {
+    prevent_destroy = true
+  }
 }
+
 resource "aws_dynamodb_table" "rooms_table" {
   name         = "chat-rooms"
   billing_mode = "PAY_PER_REQUEST"
@@ -67,5 +81,10 @@ resource "aws_dynamodb_table" "rooms_table" {
   ttl {
     attribute_name = "expiresAt"
     enabled        = true
+  }
+
+  # ÚJ: Adatvédelem a véletlen destroy ellen (A szobák jelszavai megmaradnak)
+  lifecycle {
+    prevent_destroy = true
   }
 }

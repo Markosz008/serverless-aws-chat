@@ -71,11 +71,48 @@ resource "aws_s3_object" "frontend_js_files" {
   etag         = filemd5("${path.module}/../frontend/js/${each.value}")
 }
 
+resource "aws_s3_object" "manifest_json" {
+  bucket       = aws_s3_bucket.frontend_bucket.id
+  key          = "manifest.json"
+  source       = "${path.module}/../frontend/manifest.json"
+  content_type = "application/json"
+  etag         = filemd5("${path.module}/../frontend/manifest.json")
+}
+
+resource "aws_s3_object" "service_worker" {
+  bucket       = aws_s3_bucket.frontend_bucket.id
+  key          = "sw.js"
+  source       = "${path.module}/../frontend/sw.js"
+  content_type = "application/javascript"
+  etag         = filemd5("${path.module}/../frontend/sw.js")
+}
+
+
+# --- INVALIDÁCIÓ DINAMIKUS CLOUDFRONT ID-VAL ---
+# Most ismét a cloudfront.tf-ben lévő eredeti s3_distribution-re mutat
+
+resource "null_resource" "cloudfront_invalidation" {
+  triggers = {
+    html_hash  = filemd5("${path.module}/../index.html.tpl")
+    css_hash   = filemd5("${path.module}/../frontend/css/style.css")
+    js_state   = filemd5("${path.module}/../frontend/js/state.js")
+    js_ui      = filemd5("${path.module}/../frontend/js/ui.js")
+    js_network = filemd5("${path.module}/../frontend/js/network.js")
+    js_media   = filemd5("${path.module}/../frontend/js/media.js")
+    js_app     = filemd5("${path.module}/../frontend/js/app.js")
+  }
+
+  provisioner "local-exec" {
+    command = "aws cloudfront create-invalidation --distribution-id ${aws_cloudfront_distribution.s3_distribution.id} --paths '/*'"
+  }
+}
+
+
 # --- IMAGE STORAGE BUCKET (A fotóknak) ---
 
 resource "aws_s3_bucket" "chat_images" {
   bucket_prefix = "chat-images-"
-  force_destroy = true
+  force_destroy = true # Ideiglenes fájlok (24h után törlődnek), maradhat a force_destroy
 }
 
 resource "aws_s3_bucket_ownership_controls" "image_ownership" {
@@ -111,7 +148,6 @@ resource "aws_s3_bucket_lifecycle_configuration" "expire_images" {
   }
 }
 
-# CORS - JAVÍTVA: OPTIONS eltávolítva az érvényes metódusok közül
 resource "aws_s3_bucket_cors_configuration" "chat_cors" {
   bucket = aws_s3_bucket.chat_images.id
   cors_rule {
@@ -138,55 +174,16 @@ resource "aws_s3_bucket_policy" "image_public_read" {
   depends_on = [aws_s3_bucket_public_access_block.image_access]
 }
 
-# OUTPUTOK
-output "website_url" {
-  value = "http://${aws_s3_bucket_website_configuration.frontend_config.website_endpoint}"
-}
 
-output "image_bucket_name" {
-  value = aws_s3_bucket.chat_images.id
-}
-
-resource "aws_s3_object" "manifest_json" {
-  bucket       = aws_s3_bucket.frontend_bucket.id
-  key          = "manifest.json"
-  source       = "${path.module}/../frontend/manifest.json"
-  content_type = "application/json"
-  etag         = filemd5("${path.module}/../frontend/manifest.json")
-}
-
-resource "aws_s3_object" "service_worker" {
-  bucket       = aws_s3_bucket.frontend_bucket.id
-  key          = "sw.js"
-  source       = "${path.module}/../frontend/sw.js"
-  content_type = "application/javascript"
-  etag         = filemd5("${path.module}/../frontend/sw.js")
-}
-
-resource "null_resource" "cloudfront_invalidation" {
-  triggers = {
-    # Új HTML-t és a CSS-t
-    html_hash  = filemd5("${path.module}/../index.html.tpl")
-    css_hash   = filemd5("${path.module}/../frontend/css/style.css")
-    
-    #ÚJ, szétdarabolt JS modulokat
-    js_state   = filemd5("${path.module}/../frontend/js/state.js")
-    js_ui      = filemd5("${path.module}/../frontend/js/ui.js")
-    js_network = filemd5("${path.module}/../frontend/js/network.js")
-    js_media   = filemd5("${path.module}/../frontend/js/media.js")
-    js_app     = filemd5("${path.module}/../frontend/js/app.js")
-  }
-
-  provisioner "local-exec" {
-  
-    command = "aws cloudfront create-invalidation --distribution-id ESV32IXWM4EHZ --paths '/*'"
-  }
-}
-# --- AVATAR BUCKET (Profilképek tárolása) ---
+# --- AVATAR BUCKET (Profilképek tárolása - VÉDVE AZ ADATVESZTÉSTŐL) ---
 
 resource "aws_s3_bucket" "avatar_bucket" {
   bucket_prefix = "chat-avatars-"
-  force_destroy = true
+  
+  # ÚJ: Adatvédelem a véletlen destroy ellen
+  lifecycle {
+    prevent_destroy = true
+  }
 }
 
 resource "aws_s3_bucket_ownership_controls" "avatar_ownership" {
@@ -213,13 +210,11 @@ resource "aws_s3_bucket_acl" "avatar_acl" {
   acl    = "public-read"
 }
 
-# Avatarokat NEM töröljük naponta — maradnak amíg a user nem cseréli
 resource "aws_s3_bucket_lifecycle_configuration" "avatar_lifecycle" {
   bucket = aws_s3_bucket.avatar_bucket.id
   rule {
     id     = "delete-old-avatars"
     status = "Enabled"
-    # Régi feltöltött avatarokat 90 nap után töröljük
     expiration { days = 90 }
   }
 }
@@ -248,6 +243,16 @@ resource "aws_s3_bucket_policy" "avatar_public_read" {
       Resource  = "${aws_s3_bucket.avatar_bucket.arn}/*"
     }]
   })
+}
+
+# --- OUTPUTOK ---
+
+output "website_url" {
+  value = "http://${aws_s3_bucket_website_configuration.frontend_config.website_endpoint}"
+}
+
+output "image_bucket_name" {
+  value = aws_s3_bucket.chat_images.id
 }
 
 output "avatar_bucket_name" {
