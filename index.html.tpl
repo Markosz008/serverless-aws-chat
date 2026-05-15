@@ -216,26 +216,28 @@
         </div>
 
         <div id="chat-area">
-            <div id="header">
-                <!-- BAL: avatar + cím — flex-shrink:0 hogy ne csússzon mobilon -->
-                <div id="header-left">
-                    <div id="header-avatar-wrap" onclick="toggleProfileMenu()" title="Profil">
-                        <span id="header-avatar-emoji">🦊</span>
-                        <img id="header-avatar-photo" src="" alt="" style="display:none;">
-                    </div>
-                    <div style="position:relative; display:flex; align-items:center;">
-                        <span id="header-chat-title">Chat</span>
-                        <div id="nav-notif">0</div>
-                    </div>
-                </div>
-
-                <!-- JOBB: gombok — ... eltávolítva -->
-                <div id="header-right">
-                    <button id="room-btn" class="header-btn" style="border-color:#4CAF50;color:#4CAF50;">+ Szoba</button>
-                    <button id="theme-toggle" class="header-btn" onclick="toggleThemePanel()">🎨 Témák</button>
-                    <button id="secret-mode-btn" class="header-btn" style="border-color:#ff3b30;color:#ff3b30;">🕵️ Titkos</button>
-                </div>
-            </div>
+            <div id="header" style="display:flex; flex-wrap:nowrap; justify-content:space-between; align-items:center; background:var(--header-bg); color:var(--header-text); padding:10px 15px; font-weight:bold; flex-shrink:0; gap:0; overflow:visible; position:relative; box-sizing:border-box;">
+ 
+    <!-- BAL: avatar + cím -->
+    <div id="header-left" style="display:flex; align-items:center; gap:8px; flex-shrink:0; min-width:0; overflow:visible;">
+        <div id="header-avatar-wrap" onclick="toggleProfileMenu()" title="Profil" style="width:36px; height:36px; border-radius:50%; background:var(--sidebar-bg); border:2px solid rgba(255,153,0,0.4); display:flex; align-items:center; justify-content:center; font-size:20px; cursor:pointer; flex-shrink:0; overflow:hidden;">
+            <span id="header-avatar-emoji">🦊</span>
+            <img id="header-avatar-photo" src="" alt="" style="display:none; width:100%; height:100%; object-fit:cover; border-radius:50%;">
+        </div>
+        <div style="position:relative; display:flex; align-items:center;">
+            <span id="header-chat-title" style="font-size:18px; white-space:nowrap;">Chat</span>
+            <div id="nav-notif" style="pointer-events:none;"></div>
+        </div>
+    </div>
+ 
+    <!-- JOBB: gombok — inline margin-left hogy ne legyen gap-ből eredő eltolás -->
+    <div id="header-right" style="display:flex; align-items:center; flex-shrink:0; margin-left:auto; gap:0; padding-left:8px;">
+        <button id="room-btn" class="header-btn" style="border-color:#4CAF50; color:#4CAF50; margin-left:0;">+ Szoba</button>
+        <button id="theme-toggle" class="header-btn" onclick="toggleThemePanel()" style="margin-left:5px;">🎨 Témák</button>
+        <button id="secret-mode-btn" class="header-btn" style="border-color:#ff3b30; color:#ff3b30; margin-left:5px;">🕵️ Titkos</button>
+    </div>
+ 
+</div>
 
             <div id="messages"></div>
             <div id="typing-indicator">Valaki gépel...</div>

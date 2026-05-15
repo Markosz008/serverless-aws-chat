@@ -541,3 +541,87 @@ audio { max-width: 220px; height: 40px; margin-top: 5px; outline: none; }
   #emoji-avatar-grid { grid-template-columns:repeat(6,1fr); }
   #invite-toast { width:calc(100vw - 24px); }
 }
+/* ================================================================
+   JAVÍTÁS — Header gombok kattintási probléma
+   Ezeket a szabályokat ADD HOZZÁ a style.css VÉGÉHEZ
+   (felülírják a korábbi értékeket)
+================================================================ */
+
+/* 1. FIX: Az overlay elemek amikor zárva vannak, NE blokkolják
+         az alattuk lévő elemek kattintását */
+#profile-overlay,
+#theme-panel-overlay,
+#avatar-modal-overlay {
+  display: none;
+  pointer-events: none;  /* Alapból soha ne blokkoljon */
+}
+#profile-overlay.active,
+#theme-panel-overlay.active,
+#avatar-modal-overlay.active {
+  display: block;
+  pointer-events: auto;  /* Csak aktív állapotban fogja el a kattintást */
+}
+
+/* 2. FIX: A header gombok biztosan kattinthatók legyenek —
+         minden overlay és pseudo-element fölé kerülnek */
+#header-right {
+  position: relative;
+  z-index: 10000;        /* Fölé kerül az overlayeknek (1500-1600) */
+  pointer-events: auto;
+  isolation: isolate;    /* Saját stacking context — nem örökli a szülő z-index problémáit */
+}
+
+#header-right .header-btn {
+  position: relative;
+  z-index: 10001;
+  pointer-events: auto !important;
+  cursor: pointer !important;
+  /* Biztosítjuk hogy semmi ne csússzon rá */
+  -webkit-tap-highlight-color: rgba(255,153,0,0.2);
+}
+
+/* 3. FIX: A header maga ne vágja le a gyerekek kattintási területét */
+#header {
+  overflow: visible !important;
+  position: relative;
+  z-index: 100;
+  isolation: isolate;
+}
+
+/* 4. FIX: A profile dropdown és theme panel z-indexe
+         ALACSONYABB mint a header-right, hogy ne csússzon rá */
+#profile-dropdown {
+  z-index: 9500;  /* Volt: 1600 — ez rendben volt, de biztosítjuk */
+}
+
+#theme-panel {
+  z-index: 9500;
+}
+
+/* 5. FIX: Az app-container::after (retro scanline) soha ne blokkoljon */
+#app-container::after {
+  pointer-events: none !important;
+  z-index: 100 !important;  /* Volt: 9999 — ez blokkolta a kattintásokat! */
+}
+
+/* 6. FIX: Általános védelem — egyik overlay se blokkoljon
+         ha nincs active class rajta */
+[id$="-overlay"]:not(.active) {
+  pointer-events: none !important;
+}
+
+/* 7. FIX: Desktop hover effekt a gombokra (vizuális visszajelzés) */
+#header-right .header-btn:hover {
+  opacity: 0.85;
+  transform: translateY(-1px);
+  transition: opacity 0.15s, transform 0.15s;
+}
+#header-right .header-btn:active {
+  transform: translateY(0px) scale(0.97);
+}
+#nav-notif {
+  pointer-events: none !important;  /* Soha ne fogja el a kattintást */
+  left: auto !important;            /* Az absolute left:60px-et felülírjuk */
+  right: -10px;                     /* A Chat felirat jobb sarkához tapad */
+  top: -6px;                        /* Felülre kerül */
+}
